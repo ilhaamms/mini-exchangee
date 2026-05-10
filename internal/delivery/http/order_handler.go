@@ -9,6 +9,7 @@ import (
 	"github.com/ilhaamms/ybtech/internal/domain"
 	"github.com/ilhaamms/ybtech/internal/engine"
 	"github.com/ilhaamms/ybtech/internal/repository"
+	"github.com/ilhaamms/ybtech/pkg/metrics"
 	"github.com/ilhaamms/ybtech/pkg/response"
 )
 
@@ -80,6 +81,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.engine.ProcessOrder(order)
+	metrics.OrdersCreatedTotal.Inc()
 
 	response.Created(w, "order created successfully", order.ToSnapshot())
 }

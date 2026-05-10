@@ -14,6 +14,7 @@ Golang backend untuk mini realtime trading system yang mendukung REST API, WebSo
 - [Tiga Bottleneck Utama](#tiga-bottleneck-utama)
 - [Asumsi yang Digunakan](#asumsi-yang-digunakan)
 - [Price Simulation](#price-simulation)
+- [Logging & Monitoring](#logging--monitoring)
 
 ---
 
@@ -155,11 +156,16 @@ d:\trading\
 │   │       └── nats.go          # NATS pub/sub broker
 │   └── simulator/               # Price simulation
 │       ├── price_simulator.go   # Random walk simulator
-│       └── binance_feed.go      #  Binance real market data
+│       └── finnhub_feed.go      #  Finnhub real market data (WebSocket)
 ├── migrations/
 │   └── 001_create_tables.sql    # PostgreSQL schema
-└── pkg/response/                # Shared utilities
-    └── response.go
+└── pkg/
+    ├── logger/
+    │   └── logger.go            #  Structured logging (log/slog)
+    ├── metrics/
+    │   └── metrics.go           #  Prometheus metrics
+    └── response/
+        └── response.go          # Shared HTTP response helpers
 ```
 
 ### Layer Dependency Flow
@@ -257,6 +263,47 @@ PriceSimulator.Start()
 
 Base URL: `http://localhost:8080`
 
+> **Catatan Auth**: Endpoint `/api/orders` dan `/api/trades` memerlukan header `Authorization: Bearer <token>`. Endpoint market (`/api/market/*`) dan health check bersifat public.
+
+### 0. Auth Endpoints
+
+#### Register
+```
+POST /api/register
+Content-Type: application/json
+```
+```json
+{
+  "username": "trader1",
+  "email": "trader1@example.com",
+  "password": "secret123"
+}
+```
+
+#### Login
+```
+POST /api/login
+Content-Type: application/json
+```
+```json
+{
+  "username": "trader1",
+  "password": "secret123"
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "login successful",
+  "data": {
+    "token": "eyJhbGci...",
+    "user": { "id": "USR001", "username": "trader1" }
+  }
+}
+```
+
+---
 ### 1. Create Order
 
 ```
@@ -429,6 +476,23 @@ GET /health
 ```
 
 **Response:** `{"status":"ok","service":"mini-exchange"}`
+
+### 8. Prometheus Metrics
+
+```
+GET /metrics
+```
+
+Endpoint ini mengembalikan semua metric dalam format Prometheus text exposition. Cocok di-scrape oleh Prometheus server atau dibaca langsung.
+
+**Metric yang tersedia:**
+| Metric | Type | Label | Keterangan |
+|--------|------|-------|------------|
+| `mini_exchange_http_requests_total` | Counter | method, path, status | Total HTTP request |
+| `mini_exchange_http_request_duration_seconds` | Histogram | method, path | Latency per endpoint |
+| `mini_exchange_ws_active_connections` | Gauge | — | Koneksi WebSocket aktif |
+| `mini_exchange_orders_created_total` | Counter | — | Total order dibuat |
+| `mini_exchange_trades_executed_total` | Counter | — | Total trade oleh matching engine |
 
 ---
 
@@ -740,27 +804,48 @@ Sesuai dengan spesifikasi test:
 
 ## Testing dengan cURL
 
+### 0. Auth Flow (Register + Login + Ambil Token)
+
+```bash
+# Register user baru
+curl -X POST http://localhost:8080/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"trader1","email":"trader1@example.com","password":"secret123"}'
+
+# Login dan simpan token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"trader1","password":"secret123"}' | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+echo "Token: $TOKEN"
+```
+
 ### Create Orders (buat trade terjadi)
 
 ```bash
 # Create SELL order
 curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"stock_code":"BBCA","side":"SELL","price":9500,"quantity":100}'
 
 # Create BUY order (akan match dengan SELL di atas)
 curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"stock_code":"BBCA","side":"BUY","price":9500,"quantity":100}'
 
 # Get all orders
-curl http://localhost:8080/api/orders
+curl http://localhost:8080/api/orders \
+  -H "Authorization: Bearer $TOKEN"
 
 # Get orders filtered
-curl "http://localhost:8080/api/orders?stock=BBCA&status=FILLED"
+curl "http://localhost:8080/api/orders?stock=BBCA&status=FILLED" \
+  -H "Authorization: Bearer $TOKEN"
 
 # Get trade history
-curl http://localhost:8080/api/trades
+curl http://localhost:8080/api/trades \
+  -H "Authorization: Bearer $TOKEN"
 
 # Get ticker
 curl http://localhost:8080/api/market/ticker?stock=BBCA
@@ -776,7 +861,9 @@ curl "http://localhost:8080/api/market/trades?stock=BBCA&limit=5"
 
 # Health check
 curl http://localhost:8080/health
-```
+
+# Prometheus metrics
+curl http://localhost:8080/metrics
 
 ---
 
@@ -853,13 +940,38 @@ NATS_ENABLED=true NATS_URL=nats://localhost:4222 go run cmd/server/main.go
 
 Matching engine → NATS publish → Worker subscribe → WebSocket hub. Mendukung auto-reconnect.
 
-### 6. Binance Real Market Data
+### 6. Finnhub Real Market Data
 
 ```bash
-BINANCE_ENABLED=true go run cmd/server/main.go
+FINNHUB_ENABLED=true FINNHUB_API_KEY=<api_key> go run cmd/server/main.go
 ```
 
-Mengganti price simulator dengan data real dari Binance WebSocket (crypto: BTCUSDT, ETHUSDT, dll). Auto-fallback ke simulator jika koneksi gagal.
+Mengganti price simulator dengan data real dari Finnhub WebSocket (crypto: BTCUSDT, ETHUSDT, dll via `BINANCE:BTCUSDT` symbol). Daftar API key gratis di https://finnhub.io/. Auto-fallback ke simulator jika koneksi gagal atau API key kosong.
+
+### 7. Logging & Monitoring
+
+**Structured logging** menggunakan `log/slog` (stdlib Go 1.21+):
+```bash
+# Text format (default, human-readable)
+go run cmd/server/main.go
+
+# JSON format (untuk log aggregator: ELK, Datadog, Loki)
+LOG_FORMAT=json go run cmd/server/main.go
+```
+
+Contoh output JSON:
+```json
+{"time":"2026-05-10T10:00:00Z","level":"INFO","msg":"http request","method":"POST","path":"/api/orders","status":201,"duration_ms":3,"remote_addr":"127.0.0.1:52000"}
+```
+
+**Prometheus metrics** tersedia di `GET /metrics`. Untuk scraping dengan Prometheus server, tambahkan ke `prometheus.yml`:
+```yaml
+scrape_configs:
+  - job_name: mini-exchange
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: /metrics
+```
 
 ---
 
@@ -881,7 +993,9 @@ Mengganti price simulator dengan data real dari Binance WebSocket (crypto: BTCUS
 | `POSTGRES_SSLMODE` | `disable` | SSL mode (`disable`/`require`/`verify-full`) |
 | `NATS_ENABLED` | `false` | Enable NATS message broker |
 | `NATS_URL` | `nats://localhost:4222` | NATS server URL |
-| `BINANCE_ENABLED` | `false` | Enable Binance real market data |
+| `FINNHUB_ENABLED` | `false` | Enable Finnhub real market data |
+| `FINNHUB_API_KEY` | `` | Finnhub API key (wajib jika `FINNHUB_ENABLED=true`) |
+| `LOG_FORMAT` | `text` | Format log: `text` (default) atau `json` (untuk log aggregator) |
 
 ---
 
@@ -895,5 +1009,45 @@ Mengganti price simulator dengan data real dari Binance WebSocket (crypto: BTCUS
 - **ORM**: [GORM v2](https://gorm.io) + `gorm.io/driver/postgres` — AutoMigrate, upsert, query builder
 - **Cache/PubSub**: [go-redis](https://github.com/redis/go-redis) (opt-in)
 - **Message Broker**: [nats.go](https://github.com/nats-io/nats.go) (opt-in)
+- **Logging**: `log/slog` (stdlib) — structured logging, text & JSON format
+- **Monitoring**: [prometheus/client_golang](https://github.com/prometheus/client_golang) — HTTP, WS, order, trade metrics
 - **Architecture**: Clean Architecture
 - **Testing**: Standard `testing` package
+
+---
+
+## Logging & Monitoring
+
+### Structured Logging
+
+Menggunakan `log/slog` (built-in Go 1.21+). Setiap HTTP request di-log secara otomatis dengan field:
+- `method`, `path`, `status`, `duration_ms`, `remote_addr`
+
+Set `LOG_FORMAT=json` untuk output JSON (cocok untuk Datadog, Loki, ELK):
+```bash
+LOG_FORMAT=json go run cmd/server/main.go
+```
+
+### Prometheus Metrics
+
+Endpoint `GET /metrics` mengekspos metric berikut:
+
+| Metric | Type | Keterangan |
+|--------|------|------------|
+| `mini_exchange_http_requests_total` | Counter | Total request per method/path/status |
+| `mini_exchange_http_request_duration_seconds` | Histogram | Latency per endpoint |
+| `mini_exchange_ws_active_connections` | Gauge | Jumlah koneksi WebSocket aktif |
+| `mini_exchange_orders_created_total` | Counter | Total order berhasil dibuat |
+| `mini_exchange_trades_executed_total` | Counter | Total trade dieksekusi matching engine |
+
+Contoh query PromQL:
+```promql
+# Request rate per endpoint
+rate(mini_exchange_http_requests_total[1m])
+
+# P99 latency
+histogram_quantile(0.99, rate(mini_exchange_http_request_duration_seconds_bucket[5m]))
+
+# WebSocket connections
+mini_exchange_ws_active_connections
+```

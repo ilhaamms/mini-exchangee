@@ -10,14 +10,14 @@ import (
 func loadDotEnv(filename string) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return 
+		return
 	}
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -27,7 +27,7 @@ func loadDotEnv(filename string) {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		
+
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val)
 		}
@@ -39,34 +39,30 @@ func loadDotEnv(filename string) {
 }
 
 type Config struct {
-	
 	Port string
 
-	
 	JWTSecret string
 
-	
 	RedisAddr     string
 	RedisPassword string
 	RedisDB       int
 	RedisEnabled  bool
 
-	
 	PostgresHost     string
 	PostgresPort     string
 	PostgresUser     string
 	PostgresPassword string
 	PostgresDB       string
 	PostgresSSLMode  string
-	PostgresDSN      string 
+	PostgresDSN      string
 	PostgresEnabled  bool
 
-	
 	NatsURL     string
 	NatsEnabled bool
 
-	
-	BinanceEnabled bool
+	// Finnhub real market data feed
+	FinnhubAPIKey  string
+	FinnhubEnabled bool
 }
 
 func Load() *Config {
@@ -104,7 +100,8 @@ func Load() *Config {
 		NatsURL:     getEnv("NATS_URL", "nats://localhost:4222"),
 		NatsEnabled: getEnv("NATS_ENABLED", "") == "true",
 
-		BinanceEnabled: getEnv("BINANCE_ENABLED", "") == "true",
+		FinnhubAPIKey:  getEnv("FINNHUB_API_KEY", ""),
+		FinnhubEnabled: getEnv("FINNHUB_ENABLED", "") == "true",
 	}
 
 	return cfg

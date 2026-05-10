@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ilhaamms/ybtech/internal/domain"
+	"github.com/ilhaamms/ybtech/pkg/metrics"
 )
 
 type Hub struct {
@@ -21,7 +22,7 @@ func NewHub() *Hub {
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		broadcast:  make(chan domain.Event, 1024), 
+		broadcast:  make(chan domain.Event, 1024),
 	}
 }
 
@@ -32,6 +33,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
+			metrics.WSActiveConnections.Inc()
 			log.Printf("HUB: client %s connected (total: %d)", client.id, len(h.clients))
 
 		case client := <-h.unregister:
@@ -39,13 +41,14 @@ func (h *Hub) Run() {
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+				metrics.WSActiveConnections.Dec()
 				log.Printf("HUB: client %s disconnected (total: %d)", client.id, len(h.clients))
 			}
 			h.mu.Unlock()
 
 		case event, ok := <-h.broadcast:
 			if !ok {
-				return 
+				return
 			}
 			h.broadcastEvent(event)
 		}
@@ -77,7 +80,7 @@ func (h *Hub) broadcastEvent(event domain.Event) {
 
 	for client := range h.clients {
 		if client.IsSubscribed(event.Channel, event.StockCode) {
-			
+
 			select {
 			case client.send <- message:
 			default:

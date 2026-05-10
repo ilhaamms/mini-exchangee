@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 type contextKey string
 
 const (
-	
 	UserContextKey contextKey = "user_claims"
 )
 
@@ -26,8 +26,13 @@ type JWTConfig struct {
 }
 
 func DefaultJWTConfig() JWTConfig {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "ybtech-mini-exchange-secret-key-2026"
+		log.Println("WARNING: JWT_SECRET env not set, using default (insecure for production)")
+	}
 	return JWTConfig{
-		SecretKey:   "ybtech-mini-exchange-secret-key-2026", 
+		SecretKey:   secret,
 		TokenExpiry: 24 * time.Hour,
 		Issuer:      "mini-exchange",
 	}
@@ -80,7 +85,6 @@ func AuthMiddleware(config JWTConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 				response.JSON(w, http.StatusUnauthorized, response.APIResponse{
@@ -100,7 +104,6 @@ func AuthMiddleware(config JWTConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			
 			ctx := context.WithValue(r.Context(), UserContextKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

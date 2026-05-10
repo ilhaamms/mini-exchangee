@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,22 +21,21 @@ import (
 	infraRedis "github.com/ilhaamms/ybtech/internal/infrastructure/redis"
 	"github.com/ilhaamms/ybtech/internal/repository"
 	"github.com/ilhaamms/ybtech/internal/simulator"
+	"github.com/ilhaamms/ybtech/pkg/logger"
 )
 
 func main() {
+	logger.Init()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.Println("=== Mini Exchange - Realtime Trading System ===")
+	slog.Info("=== Mini Exchange - Realtime Trading System ===")
 
-	
 	cfg := config.Load()
 
-	
 	var orderRepo repository.OrderRepository = repository.NewOrderRepository()
 	var tradeRepo repository.TradeRepository = repository.NewTradeRepository()
 	marketRepo := repository.NewMarketRepository()
 	var userRepo repository.UserRepository = repository.NewUserRepository()
 
-	
 	var pgDB *infraPostgres.DB
 	if cfg.PostgresEnabled {
 		var err error
@@ -50,17 +50,13 @@ func main() {
 		}
 	}
 
-	
 	hub := wsDelivery.NewHub()
 	go hub.Run()
 
-	
-	
 	onEvent := func(event domain.Event) {
 		hub.BroadcastEvent(event)
 	}
 
-	
 	var redisClient *infraRedis.Client
 	var redisPubSub *infraRedis.PubSub
 	var redisCache *infraRedis.Cache
@@ -72,9 +68,8 @@ func main() {
 			log.Printf("WARNING: Redis connection failed: %v (continuing without Redis)", err)
 		} else {
 			redisCache = infraRedis.NewCache(redisClient)
-			_ = redisCache 
+			_ = redisCache
 
-			
 			redisPubSub = infraRedis.NewPubSub(redisClient, func(event domain.Event) {
 				hub.BroadcastEvent(event)
 			})
@@ -82,14 +77,13 @@ func main() {
 				log.Printf("WARNING: Redis Pub/Sub failed: %v", err)
 			}
 
-			
 			originalOnEvent := onEvent
 			onEvent = func(event domain.Event) {
-				originalOnEvent(event) 
+				originalOnEvent(event)
 				if err := redisPubSub.Publish(context.Background(), event); err != nil {
 					log.Printf("WARNING: Redis publish failed: %v", err)
 				}
-				
+
 				if event.Type == domain.EventTicker {
 					if ticker, ok := event.Data.(domain.Ticker); ok {
 						redisCache.SetTicker(context.Background(), ticker)
@@ -101,7 +95,6 @@ func main() {
 		}
 	}
 
-	
 	var natsBroker *infraNats.Broker
 
 	if cfg.NatsEnabled {
@@ -110,16 +103,15 @@ func main() {
 		if err != nil {
 			log.Printf("WARNING: NATS connection failed: %v (continuing without NATS)", err)
 		} else {
-			
+
 			natsBroker.Subscribe(func(event domain.Event) {
 				hub.BroadcastEvent(event)
 			})
 
-			
 			onEvent = func(event domain.Event) {
 				if err := natsBroker.Publish(event); err != nil {
 					log.Printf("WARNING: NATS publish failed: %v", err)
-					
+
 					hub.BroadcastEvent(event)
 				}
 			}
@@ -128,45 +120,45 @@ func main() {
 		}
 	}
 
-	
 	matchingEngine := engine.NewMatchingEngine(orderRepo, tradeRepo, marketRepo, onEvent)
 
-	
 	var priceFeeder interface{ Stop() }
 
-	if cfg.BinanceEnabled {
-		
-		feed := simulator.NewBinanceFeed(marketRepo, onEvent)
-		if err := feed.Start(); err != nil {
-			log.Printf("WARNING: Binance feed failed: %v (falling back to simulator)", err)
-			
+	if cfg.FinnhubEnabled {
+		if cfg.FinnhubAPIKey == "" {
+			log.Println("WARNING: FINNHUB_ENABLED=true but FINNHUB_API_KEY is empty, falling back to simulator")
 			stocks := simulator.DefaultStocks()
 			sim := simulator.NewPriceSimulator(marketRepo, onEvent, stocks)
 			sim.Start()
 			priceFeeder = sim
 		} else {
-			priceFeeder = feed
-			log.Println("BINANCE: real market data feed enabled")
+			feed := simulator.NewFinnhubFeed(cfg.FinnhubAPIKey, marketRepo, onEvent)
+			if err := feed.Start(); err != nil {
+				log.Printf("WARNING: Finnhub feed failed: %v (falling back to simulator)", err)
+				stocks := simulator.DefaultStocks()
+				sim := simulator.NewPriceSimulator(marketRepo, onEvent, stocks)
+				sim.Start()
+				priceFeeder = sim
+			} else {
+				priceFeeder = feed
+				slog.Info("FINNHUB: real market data feed enabled")
+			}
 		}
 	} else {
-		
+
 		stocks := simulator.DefaultStocks()
 		sim := simulator.NewPriceSimulator(marketRepo, onEvent, stocks)
 		sim.Start()
 		priceFeeder = sim
 	}
 
-	
 	jwtConfig := middleware.DefaultJWTConfig()
 	if cfg.JWTSecret != "" {
 		jwtConfig.SecretKey = cfg.JWTSecret
 	}
 
-	
-	
 	rateLimiter := middleware.NewRateLimiter(100, 100)
 
-	
 	router := httpDelivery.NewRouter(httpDelivery.RouterConfig{
 		OrderRepo:      orderRepo,
 		TradeRepo:      tradeRepo,
@@ -178,7 +170,6 @@ func main() {
 		RateLimiter:    rateLimiter,
 	})
 
-	
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
@@ -187,44 +178,40 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	
 	go func() {
-		log.Printf("Server starting on http://localhost:%s", cfg.Port)
-		log.Printf("REST API:     http://localhost:%s/api/orders", cfg.Port)
-		log.Printf("Auth:         http://localhost:%s/api/register | /api/login", cfg.Port)
-		log.Printf("WebSocket:    ws://localhost:%s/ws", cfg.Port)
-		log.Printf("Health:       http://localhost:%s/health", cfg.Port)
-		log.Println("─────────────────────────────────────────────")
-		log.Printf("Rate Limit:   100 req/min per IP")
-		log.Printf("JWT Auth:     enabled (protected: /api/orders, /api/trades)")
-		log.Printf("Redis:        %s", enabledStr(cfg.RedisEnabled))
-		log.Printf("PostgreSQL:   %s", enabledStr(cfg.PostgresEnabled))
-		log.Printf("NATS:         %s", enabledStr(cfg.NatsEnabled))
-		log.Printf("Binance Feed: %s", enabledStr(cfg.BinanceEnabled))
+		slog.Info("server starting",
+			"addr", "http://localhost:"+cfg.Port,
+			"rest_api", "http://localhost:"+cfg.Port+"/api/orders",
+			"auth", "http://localhost:"+cfg.Port+"/api/register | /api/login",
+			"websocket", "ws://localhost:"+cfg.Port+"/ws",
+			"health", "http://localhost:"+cfg.Port+"/health",
+			"metrics", "http://localhost:"+cfg.Port+"/metrics",
+			"rate_limit", "100 req/min per IP",
+			"jwt_auth", "enabled (protected: /api/orders, /api/trades)",
+			"redis", enabledStr(cfg.RedisEnabled),
+			"postgres", enabledStr(cfg.PostgresEnabled),
+			"nats", enabledStr(cfg.NatsEnabled),
+			"finnhub_feed", enabledStr(cfg.FinnhubEnabled),
+		)
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
 	}()
 
-	
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	log.Printf("Received signal %v, shutting down...", sig)
 
-	
 	priceFeeder.Stop()
 
-	
 	rateLimiter.Stop()
 
-	
 	if natsBroker != nil {
 		natsBroker.Close()
 	}
 
-	
 	if redisPubSub != nil {
 		redisPubSub.Stop()
 	}
@@ -232,12 +219,10 @@ func main() {
 		redisClient.Close()
 	}
 
-	
 	if pgDB != nil {
 		pgDB.Close()
 	}
 
-	
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

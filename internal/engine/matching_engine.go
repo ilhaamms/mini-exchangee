@@ -7,6 +7,7 @@ import (
 
 	"github.com/ilhaamms/ybtech/internal/domain"
 	"github.com/ilhaamms/ybtech/internal/repository"
+	"github.com/ilhaamms/ybtech/pkg/metrics"
 )
 
 type EventCallback func(event domain.Event)
@@ -50,11 +51,12 @@ func (e *MatchingEngine) getStockMutex(stockCode string) *sync.Mutex {
 }
 
 func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
-	
-	
+
 	stockMu := e.getStockMutex(order.StockCode)
 	stockMu.Lock()
 	defer stockMu.Unlock()
+
+	var traded bool
 
 	var oppositeSide domain.Side
 	if order.Side == domain.SideBuy {
@@ -63,7 +65,6 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 		oppositeSide = domain.SideBuy
 	}
 
-	
 	oppositeOrders, err := e.orderRepo.GetOpenOrdersByStock(order.StockCode, oppositeSide)
 	if err != nil {
 		log.Printf("ERROR: failed to get open orders for %s: %v", order.StockCode, err)
@@ -75,25 +76,20 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 			break
 		}
 
-		
 		if !e.pricesMatch(order, counterOrder) {
 			continue
 		}
 
-		
 		fillQty := min(order.GetRemainingQty(), counterOrder.GetRemainingQty())
 		if fillQty <= 0 {
 			continue
 		}
 
-		
 		tradePrice := counterOrder.Price
 
-		
 		order.Fill(fillQty)
 		counterOrder.Fill(fillQty)
 
-		
 		if err := e.orderRepo.UpdateStatus(order); err != nil {
 			log.Printf("ERROR: failed to update order status %s: %v", order.ID, err)
 		}
@@ -101,11 +97,9 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 			log.Printf("ERROR: failed to update order status %s: %v", counterOrder.ID, err)
 		}
 
-		
 		e.tradeSeq++
 		tradeID := fmt.Sprintf("T%010d", e.tradeSeq)
 
-		
 		var buyOrderID, sellOrderID string
 		if order.Side == domain.SideBuy {
 			buyOrderID = order.ID
@@ -115,18 +109,17 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 			sellOrderID = order.ID
 		}
 
-		
 		trade := domain.NewTrade(tradeID, order.StockCode, buyOrderID, sellOrderID, tradePrice, fillQty)
 		if err := e.tradeRepo.Save(trade); err != nil {
 			log.Printf("ERROR: failed to save trade: %v", err)
 			continue
 		}
+		traded = true
+		metrics.TradesExecutedTotal.Inc()
 
-		
 		md := e.marketRepo.GetOrCreate(order.StockCode, tradePrice)
 		md.UpdatePrice(tradePrice, fillQty)
 
-		
 		if e.onEvent != nil {
 			e.onEvent(domain.Event{
 				Type:      domain.EventTrade,
@@ -135,7 +128,6 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 				Data:      trade,
 			})
 
-			
 			e.onEvent(domain.Event{
 				Type:      domain.EventTicker,
 				Channel:   "market.ticker",
@@ -143,7 +135,6 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 				Data:      md.GetTicker(),
 			})
 
-			
 			e.onEvent(domain.Event{
 				Type:      domain.EventOrderUpdate,
 				Channel:   "order.update",
@@ -161,26 +152,34 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 		log.Printf("TRADE: %s %s %d @ %.2f (buy=%s, sell=%s)",
 			tradeID, order.StockCode, fillQty, tradePrice, buyOrderID, sellOrderID)
 	}
+
+	// Emit order book snapshot once after all fills for this order
+	if traded && e.onEvent != nil {
+		ob := e.buildOrderBookLocked(order.StockCode)
+		e.onEvent(domain.Event{
+			Type:      domain.EventOrderBook,
+			Channel:   "market.orderbook",
+			StockCode: order.StockCode,
+			Data:      ob,
+		})
+	}
 }
 
 func (e *MatchingEngine) pricesMatch(incoming, resting *domain.Order) bool {
 	if incoming.Side == domain.SideBuy {
-		
+
 		return incoming.Price >= resting.Price
 	}
-	
+
 	return incoming.Price <= resting.Price
 }
 
-func (e *MatchingEngine) GetOrderBook(stockCode string) domain.OrderBook {
-	stockMu := e.getStockMutex(stockCode)
-	stockMu.Lock()
-	defer stockMu.Unlock()
-
+// buildOrderBookLocked builds the order book without acquiring the stock mutex.
+// Must only be called when the caller already holds the per-stock mutex.
+func (e *MatchingEngine) buildOrderBookLocked(stockCode string) domain.OrderBook {
 	buyOrders, _ := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideBuy)
 	sellOrders, _ := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideSell)
 
-	
 	bidMap := make(map[float64]*domain.OrderBookEntry)
 	for _, o := range buyOrders {
 		snap := o.ToSnapshot()
@@ -196,7 +195,6 @@ func (e *MatchingEngine) GetOrderBook(stockCode string) domain.OrderBook {
 		}
 	}
 
-	
 	askMap := make(map[float64]*domain.OrderBookEntry)
 	for _, o := range sellOrders {
 		snap := o.ToSnapshot()
@@ -212,29 +210,31 @@ func (e *MatchingEngine) GetOrderBook(stockCode string) domain.OrderBook {
 		}
 	}
 
-	
 	bids := make([]domain.OrderBookEntry, 0, len(bidMap))
 	for _, entry := range bidMap {
 		bids = append(bids, *entry)
 	}
-	
-	sortDesc := func(i, j int) bool { return bids[i].Price > bids[j].Price }
-
 	asks := make([]domain.OrderBookEntry, 0, len(askMap))
 	for _, entry := range askMap {
 		asks = append(asks, *entry)
 	}
-	
-	sortAsc := func(i, j int) bool { return asks[i].Price < asks[j].Price }
 
-	sortSlice(bids, sortDesc)
-	sortSlice(asks, sortAsc)
+	sortSlice(bids, func(i, j int) bool { return bids[i].Price > bids[j].Price })
+	sortSlice(asks, func(i, j int) bool { return asks[i].Price < asks[j].Price })
 
 	return domain.OrderBook{
 		StockCode: stockCode,
 		Bids:      bids,
 		Asks:      asks,
 	}
+}
+
+func (e *MatchingEngine) GetOrderBook(stockCode string) domain.OrderBook {
+	stockMu := e.getStockMutex(stockCode)
+	stockMu.Lock()
+	defer stockMu.Unlock()
+
+	return e.buildOrderBookLocked(stockCode)
 }
 
 func sortSlice(entries []domain.OrderBookEntry, less func(i, j int) bool) {

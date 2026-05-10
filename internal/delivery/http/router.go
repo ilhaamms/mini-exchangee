@@ -1,7 +1,8 @@
 package http
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -9,7 +10,19 @@ import (
 	"github.com/ilhaamms/ybtech/internal/delivery/websocket"
 	"github.com/ilhaamms/ybtech/internal/engine"
 	"github.com/ilhaamms/ybtech/internal/repository"
+	"github.com/ilhaamms/ybtech/pkg/metrics"
 )
+
+// statusRecorder wraps http.ResponseWriter to capture the status code written.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sr *statusRecorder) WriteHeader(code int) {
+	sr.status = code
+	sr.ResponseWriter.WriteHeader(code)
+}
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,11 +39,36 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// loggingMiddleware logs every request with structured fields via slog
+// and records Prometheus HTTP metrics.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("HTTP: %s %s %s", r.Method, r.URL.Path, time.Since(start))
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+		next.ServeHTTP(rec, r)
+
+		duration := time.Since(start)
+		status := rec.status
+
+		slog.Info("http request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", status,
+			"duration_ms", duration.Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		)
+
+		metrics.HTTPRequestsTotal.WithLabelValues(
+			r.Method,
+			r.URL.Path,
+			fmt.Sprintf("%d", status),
+		).Inc()
+
+		metrics.HTTPRequestDuration.WithLabelValues(
+			r.Method,
+			r.URL.Path,
+		).Observe(duration.Seconds())
 	})
 }
 
@@ -61,6 +99,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","service":"mini-exchange"}`))
 	})
+
+	mux.Handle("/metrics", metrics.Handler())
 
 	authMw := middleware.AuthMiddleware(cfg.JWTConfig)
 

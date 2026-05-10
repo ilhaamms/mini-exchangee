@@ -12,31 +12,27 @@ import (
 	"github.com/ilhaamms/ybtech/pkg/response"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
 type contextKey string
 
 const (
-	// UserContextKey is the key used to store user claims in the request context
+	
 	UserContextKey contextKey = "user_claims"
 )
 
-// JWTConfig holds JWT configuration
 type JWTConfig struct {
 	SecretKey   string
 	TokenExpiry time.Duration
 	Issuer      string
 }
 
-// DefaultJWTConfig returns the default JWT configuration
 func DefaultJWTConfig() JWTConfig {
 	return JWTConfig{
-		SecretKey:   "ybtech-mini-exchange-secret-key-2026", // override via env JWT_SECRET
+		SecretKey:   "ybtech-mini-exchange-secret-key-2026", 
 		TokenExpiry: 24 * time.Hour,
 		Issuer:      "mini-exchange",
 	}
 }
 
-// GenerateToken creates a new JWT token for a user
 func GenerateToken(config JWTConfig, user *domain.User) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id":  user.ID,
@@ -50,7 +46,6 @@ func GenerateToken(config JWTConfig, user *domain.User) (string, error) {
 	return token.SignedString([]byte(config.SecretKey))
 }
 
-// ParseToken validates and parses a JWT token string
 func ParseToken(config JWTConfig, tokenString string) (*domain.UserClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -73,8 +68,6 @@ func ParseToken(config JWTConfig, tokenString string) (*domain.UserClaims, error
 	return nil, jwt.ErrSignatureInvalid
 }
 
-// AuthMiddleware creates an HTTP middleware that validates JWT tokens.
-// Protected routes will have user claims available in the request context.
 func AuthMiddleware(config JWTConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +80,7 @@ func AuthMiddleware(config JWTConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Expected format: "Bearer <token>"
+			
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 				response.JSON(w, http.StatusUnauthorized, response.APIResponse{
@@ -107,14 +100,13 @@ func AuthMiddleware(config JWTConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Store claims in request context for downstream handlers
+			
 			ctx := context.WithValue(r.Context(), UserContextKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// GetUserFromContext extracts user claims from the request context
 func GetUserFromContext(r *http.Request) *domain.UserClaims {
 	if claims, ok := r.Context().Value(UserContextKey).(*domain.UserClaims); ok {
 		return claims
@@ -122,9 +114,6 @@ func GetUserFromContext(r *http.Request) *domain.UserClaims {
 	return nil
 }
 
-// ValidateWSToken validates a JWT token from WebSocket query parameter.
-// WebSocket connections can't send custom headers, so we accept the token
-// as a query parameter: ws://localhost:8080/ws?token=<jwt>
 func ValidateWSToken(config JWTConfig, tokenString string) (*domain.UserClaims, error) {
 	return ParseToken(config, tokenString)
 }

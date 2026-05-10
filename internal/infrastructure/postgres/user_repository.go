@@ -8,17 +8,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserRepository provides GORM-backed storage for users
 type UserRepository struct {
 	db *gorm.DB
 }
 
-// NewUserRepository creates a new GORM user repository
 func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db.GetConn()}
 }
 
-// Save inserts a new user into the database
 func (r *UserRepository) Save(user *domain.User) error {
 	m := UserModel{
 		ID:        user.ID,
@@ -41,7 +38,6 @@ func (r *UserRepository) Save(user *domain.User) error {
 	return nil
 }
 
-// GetByUsername retrieves a user by username
 func (r *UserRepository) GetByUsername(username string) (*domain.User, error) {
 	var m UserModel
 	result := r.db.First(&m, "username = ?", username)
@@ -51,7 +47,6 @@ func (r *UserRepository) GetByUsername(username string) (*domain.User, error) {
 	return userModelToDomain(m), nil
 }
 
-// GetByID retrieves a user by their ID
 func (r *UserRepository) GetByID(id string) (*domain.User, error) {
 	var m UserModel
 	result := r.db.First(&m, "id = ?", id)

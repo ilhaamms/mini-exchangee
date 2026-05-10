@@ -9,17 +9,14 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// OrderRepository provides GORM-backed storage for orders.
 type OrderRepository struct {
 	db *gorm.DB
 }
 
-// NewOrderRepository creates a new GORM order repository
 func NewOrderRepository(db *DB) *OrderRepository {
 	return &OrderRepository{db: db.GetConn()}
 }
 
-// Save inserts or upserts an order
 func (r *OrderRepository) Save(order *domain.Order) error {
 	snap := order.ToSnapshot()
 	m := OrderModel{
@@ -44,7 +41,6 @@ func (r *OrderRepository) Save(order *domain.Order) error {
 	return result.Error
 }
 
-// UpdateStatus updates fill status of an order
 func (r *OrderRepository) UpdateStatus(order *domain.Order) error {
 	snap := order.ToSnapshot()
 	result := r.db.Model(&OrderModel{}).Where("id = ?", snap.ID).Updates(map[string]interface{}{
@@ -59,7 +55,6 @@ func (r *OrderRepository) UpdateStatus(order *domain.Order) error {
 	return result.Error
 }
 
-// GetByID retrieves an order by its ID
 func (r *OrderRepository) GetByID(id string) (*domain.Order, error) {
 	var m OrderModel
 	result := r.db.First(&m, "id = ?", id)
@@ -69,7 +64,6 @@ func (r *OrderRepository) GetByID(id string) (*domain.Order, error) {
 	return orderModelToDomain(m), nil
 }
 
-// GetAll returns orders optionally filtered by stock and status
 func (r *OrderRepository) GetAll(stockCode, status string) ([]domain.Order, error) {
 	var models []OrderModel
 	q := r.db.Order("created_at DESC")
@@ -89,7 +83,6 @@ func (r *OrderRepository) GetAll(stockCode, status string) ([]domain.Order, erro
 	return orders, nil
 }
 
-// GetOpenOrdersByStock returns open/partial orders for matching, sorted FIFO
 func (r *OrderRepository) GetOpenOrdersByStock(stockCode string, side domain.Side) ([]*domain.Order, error) {
 	var models []OrderModel
 	result := r.db.

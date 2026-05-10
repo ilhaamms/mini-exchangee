@@ -8,12 +8,10 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// DB wraps the GORM database connection
 type DB struct {
 	conn *gorm.DB
 }
 
-// NewDB creates a new PostgreSQL connection via GORM and runs AutoMigrate
 func NewDB(dsn string) (*DB, error) {
 	conn, err := gorm.Open(gormPostgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
@@ -22,7 +20,7 @@ func NewDB(dsn string) (*DB, error) {
 		return nil, err
 	}
 
-	// Configure connection pool
+	
 	sqlDB, err := conn.DB()
 	if err != nil {
 		return nil, err
@@ -41,12 +39,10 @@ func NewDB(dsn string) (*DB, error) {
 	return db, nil
 }
 
-// GetConn returns the underlying *gorm.DB
 func (db *DB) GetConn() *gorm.DB {
 	return db.conn
 }
 
-// Close closes the database connection
 func (db *DB) Close() error {
 	log.Println("POSTGRES: closing connection")
 	sqlDB, err := db.conn.DB()
@@ -56,7 +52,6 @@ func (db *DB) Close() error {
 	return sqlDB.Close()
 }
 
-// migrate runs GORM AutoMigrate for all models
 func (db *DB) migrate() error {
 	err := db.conn.AutoMigrate(
 		&OrderModel{},

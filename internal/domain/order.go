@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Side represents the order side (BUY or SELL)
 type Side string
 
 const (
@@ -13,7 +12,6 @@ const (
 	SideSell Side = "SELL"
 )
 
-// OrderStatus represents the current status of an order
 type OrderStatus string
 
 const (
@@ -23,7 +21,6 @@ const (
 	OrderStatusCancelled OrderStatus = "CANCELLED"
 )
 
-// Order represents a trading order in the system
 type Order struct {
 	mu            sync.RWMutex `json:"-"`
 	ID            string       `json:"id"`
@@ -38,7 +35,6 @@ type Order struct {
 	UpdatedAt     time.Time    `json:"updated_at"`
 }
 
-// NewOrder creates a new order with the given parameters
 func NewOrder(id, stockCode string, side Side, price float64, quantity int64) *Order {
 	now := time.Now()
 	return &Order{
@@ -55,7 +51,6 @@ func NewOrder(id, stockCode string, side Side, price float64, quantity int64) *O
 	}
 }
 
-// Fill reduces remaining quantity and updates status (thread-safe)
 func (o *Order) Fill(qty int64) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -72,21 +67,18 @@ func (o *Order) Fill(qty int64) {
 	}
 }
 
-// GetRemainingQty returns remaining quantity (thread-safe)
 func (o *Order) GetRemainingQty() int64 {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.RemainingQty
 }
 
-// GetStatus returns current status (thread-safe)
 func (o *Order) GetStatus() OrderStatus {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.Status
 }
 
-// ToSnapshot returns a copy of the order for safe reading
 func (o *Order) ToSnapshot() Order {
 	o.mu.RLock()
 	defer o.mu.RUnlock()

@@ -8,17 +8,14 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// TradeRepository provides GORM-backed storage for trades
 type TradeRepository struct {
 	db *gorm.DB
 }
 
-// NewTradeRepository creates a new GORM trade repository
 func NewTradeRepository(db *DB) *TradeRepository {
 	return &TradeRepository{db: db.GetConn()}
 }
 
-// Save inserts a trade (ignore duplicate)
 func (r *TradeRepository) Save(trade *domain.Trade) error {
 	m := TradeModel{
 		ID:          trade.ID,
@@ -36,7 +33,6 @@ func (r *TradeRepository) Save(trade *domain.Trade) error {
 	return result.Error
 }
 
-// GetAll returns all trades sorted by time descending
 func (r *TradeRepository) GetAll() ([]domain.Trade, error) {
 	var models []TradeModel
 	if result := r.db.Order("created_at DESC").Find(&models); result.Error != nil {
@@ -45,7 +41,6 @@ func (r *TradeRepository) GetAll() ([]domain.Trade, error) {
 	return tradeModelsToDomain(models), nil
 }
 
-// GetByStock returns trades for a specific stock code
 func (r *TradeRepository) GetByStock(stockCode string) ([]domain.Trade, error) {
 	var models []TradeModel
 	result := r.db.Where("stock_code = ?", stockCode).Order("created_at DESC").Find(&models)
@@ -55,7 +50,6 @@ func (r *TradeRepository) GetByStock(stockCode string) ([]domain.Trade, error) {
 	return tradeModelsToDomain(models), nil
 }
 
-// GetRecentByStock returns the last N trades for a stock
 func (r *TradeRepository) GetRecentByStock(stockCode string, limit int) ([]domain.Trade, error) {
 	var models []TradeModel
 	result := r.db.Where("stock_code = ?", stockCode).Order("created_at DESC").Limit(limit).Find(&models)

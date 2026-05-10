@@ -7,14 +7,12 @@ import (
 	"github.com/ilhaamms/ybtech/internal/domain"
 )
 
-// TradeRepository provides thread-safe in-memory storage for trades
 type InMemoryTradeRepository struct {
 	mu      sync.RWMutex
 	trades  []*domain.Trade
 	byStock map[string][]*domain.Trade
 }
 
-// NewTradeRepository creates a new TradeRepository
 func NewTradeRepository() *InMemoryTradeRepository {
 	return &InMemoryTradeRepository{
 		trades:  make([]*domain.Trade, 0),
@@ -22,7 +20,6 @@ func NewTradeRepository() *InMemoryTradeRepository {
 	}
 }
 
-// Save persists a trade to the repository
 func (r *InMemoryTradeRepository) Save(trade *domain.Trade) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -32,7 +29,6 @@ func (r *InMemoryTradeRepository) Save(trade *domain.Trade) error {
 	return nil
 }
 
-// GetAll returns all trades sorted by time descending
 func (r *InMemoryTradeRepository) GetAll() ([]domain.Trade, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -49,7 +45,6 @@ func (r *InMemoryTradeRepository) GetAll() ([]domain.Trade, error) {
 	return results, nil
 }
 
-// GetByStock returns trades for a specific stock code
 func (r *InMemoryTradeRepository) GetByStock(stockCode string) ([]domain.Trade, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -67,7 +62,6 @@ func (r *InMemoryTradeRepository) GetByStock(stockCode string) ([]domain.Trade, 
 	return results, nil
 }
 
-// GetRecentByStock returns the last N trades for a stock
 func (r *InMemoryTradeRepository) GetRecentByStock(stockCode string, limit int) ([]domain.Trade, error) {
 	trades, err := r.GetByStock(stockCode)
 	if err != nil {

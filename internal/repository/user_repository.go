@@ -7,15 +7,13 @@ import (
 	"github.com/ilhaamms/ybtech/internal/domain"
 )
 
-// UserRepository provides thread-safe in-memory storage for users
 type InMemoryUserRepository struct {
 	mu         sync.RWMutex
-	users      map[string]*domain.User // userID -> User
-	byUsername map[string]*domain.User // username -> User
-	byEmail    map[string]*domain.User // email -> User
+	users      map[string]*domain.User 
+	byUsername map[string]*domain.User 
+	byEmail    map[string]*domain.User 
 }
 
-// NewUserRepository creates a new UserRepository
 func NewUserRepository() *InMemoryUserRepository {
 	return &InMemoryUserRepository{
 		users:      make(map[string]*domain.User),
@@ -24,17 +22,16 @@ func NewUserRepository() *InMemoryUserRepository {
 	}
 }
 
-// Save persists a user to the repository
 func (r *InMemoryUserRepository) Save(user *domain.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Check for duplicate username
+	
 	if _, exists := r.byUsername[user.Username]; exists {
 		return fmt.Errorf("username '%s' already exists", user.Username)
 	}
 
-	// Check for duplicate email
+	
 	if _, exists := r.byEmail[user.Email]; exists {
 		return fmt.Errorf("email '%s' already exists", user.Email)
 	}
@@ -45,7 +42,6 @@ func (r *InMemoryUserRepository) Save(user *domain.User) error {
 	return nil
 }
 
-// GetByUsername retrieves a user by username
 func (r *InMemoryUserRepository) GetByUsername(username string) (*domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -57,7 +53,6 @@ func (r *InMemoryUserRepository) GetByUsername(username string) (*domain.User, e
 	return user, nil
 }
 
-// GetByID retrieves a user by their ID
 func (r *InMemoryUserRepository) GetByID(id string) (*domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

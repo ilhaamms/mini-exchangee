@@ -14,14 +14,12 @@ import (
 
 var orderSeq int64
 
-// OrderHandler handles order-related HTTP requests
 type OrderHandler struct {
 	orderRepo  repository.OrderRepository
 	marketRepo *repository.MarketRepository
 	engine     *engine.MatchingEngine
 }
 
-// NewOrderHandler creates a new OrderHandler
 func NewOrderHandler(
 	orderRepo repository.OrderRepository,
 	marketRepo *repository.MarketRepository,
@@ -34,7 +32,6 @@ func NewOrderHandler(
 	}
 }
 
-// CreateOrderRequest represents the request body for creating an order
 type CreateOrderRequest struct {
 	StockCode string  `json:"stock_code"`
 	Side      string  `json:"side"`
@@ -42,7 +39,6 @@ type CreateOrderRequest struct {
 	Quantity  int64   `json:"quantity"`
 }
 
-// CreateOrder handles POST /api/orders
 func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.BadRequest(w, "method not allowed, use POST")
@@ -55,7 +51,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input
+	
 	if req.StockCode == "" {
 		response.BadRequest(w, "stock_code is required")
 		return
@@ -73,29 +69,28 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate unique order ID (atomic for concurrency safety)
+	
 	orderID := fmt.Sprintf("ORD%010d", atomic.AddInt64(&orderSeq, 1))
 
-	// Ensure market data exists for this stock
+	
 	h.marketRepo.GetOrCreate(req.StockCode, req.Price)
 
-	// Create order
+	
 	order := domain.NewOrder(orderID, req.StockCode, domain.Side(req.Side), req.Price, req.Quantity)
 
-	// Save order first
+	
 	if err := h.orderRepo.Save(order); err != nil {
 		response.InternalError(w, "failed to save order: "+err.Error())
 		return
 	}
 
-	// Process matching in a goroutine for non-blocking response
-	// The matching engine has per-stock locking so concurrent orders are safe
+	
+	
 	go h.engine.ProcessOrder(order)
 
 	response.Created(w, "order created successfully", order.ToSnapshot())
 }
 
-// GetOrders handles GET /api/orders?stock=BBCA&status=OPEN
 func (h *OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.BadRequest(w, "method not allowed, use GET")

@@ -2,7 +2,6 @@ package domain
 
 import "time"
 
-// Trade represents a completed trade between a buy and sell order
 type Trade struct {
 	ID           string  `json:"id"`
 	StockCode    string  `json:"stock_code"`
@@ -13,7 +12,6 @@ type Trade struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-// NewTrade creates a new trade record
 func NewTrade(id, stockCode, buyOrderID, sellOrderID string, price float64, quantity int64) *Trade {
 	return &Trade{
 		ID:          id,

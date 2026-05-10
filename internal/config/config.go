@@ -7,19 +7,17 @@ import (
 	"strings"
 )
 
-// loadDotEnv reads a .env file and sets environment variables
-// that are not already set. Does nothing if the file doesn't exist.
 func loadDotEnv(filename string) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return // .env is optional
+		return 
 	}
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		// skip empty lines and comments
+		
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -29,7 +27,7 @@ func loadDotEnv(filename string) {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		// only set if not already set by the real environment
+		
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val)
 		}
@@ -40,40 +38,37 @@ func loadDotEnv(filename string) {
 	}
 }
 
-// Config holds all application configuration, populated from environment variables
 type Config struct {
-	// Server
+	
 	Port string
 
-	// JWT
+	
 	JWTSecret string
 
-	// Redis
+	
 	RedisAddr     string
 	RedisPassword string
 	RedisDB       int
 	RedisEnabled  bool
 
-	// PostgreSQL
+	
 	PostgresHost     string
 	PostgresPort     string
 	PostgresUser     string
 	PostgresPassword string
 	PostgresDB       string
 	PostgresSSLMode  string
-	PostgresDSN      string // built from the fields above
+	PostgresDSN      string 
 	PostgresEnabled  bool
 
-	// NATS
+	
 	NatsURL     string
 	NatsEnabled bool
 
-	// Binance
+	
 	BinanceEnabled bool
 }
 
-// Load reads configuration from environment variables with sensible defaults.
-// It also loads a .env file from the current working directory if one exists.
 func Load() *Config {
 	loadDotEnv(".env")
 

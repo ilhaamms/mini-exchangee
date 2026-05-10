@@ -9,14 +9,12 @@ import (
 	"github.com/ilhaamms/ybtech/pkg/response"
 )
 
-// MarketHandler handles market data HTTP requests
 type MarketHandler struct {
 	marketRepo *repository.MarketRepository
 	tradeRepo  repository.TradeRepository
 	engine     *engine.MatchingEngine
 }
 
-// NewMarketHandler creates a new MarketHandler
 func NewMarketHandler(
 	marketRepo *repository.MarketRepository,
 	tradeRepo repository.TradeRepository,
@@ -29,7 +27,6 @@ func NewMarketHandler(
 	}
 }
 
-// GetTicker handles GET /api/market/ticker?stock=BBCA
 func (h *MarketHandler) GetTicker(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.BadRequest(w, "method not allowed, use GET")
@@ -48,12 +45,11 @@ func (h *MarketHandler) GetTicker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return all tickers
+	
 	tickers := h.marketRepo.GetAll()
 	response.Success(w, "all tickers retrieved successfully", tickers)
 }
 
-// GetOrderBook handles GET /api/market/orderbook?stock=BBCA
 func (h *MarketHandler) GetOrderBook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.BadRequest(w, "method not allowed, use GET")
@@ -70,7 +66,6 @@ func (h *MarketHandler) GetOrderBook(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, "order book retrieved successfully", orderBook)
 }
 
-// GetRecentTrades handles GET /api/market/trades?stock=BBCA&limit=10
 func (h *MarketHandler) GetRecentTrades(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.BadRequest(w, "method not allowed, use GET")
@@ -83,7 +78,7 @@ func (h *MarketHandler) GetRecentTrades(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	limit := 20 // default
+	limit := 20 
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
 			limit = parsed

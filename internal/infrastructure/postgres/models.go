@@ -2,8 +2,6 @@ package postgres
 
 import "time"
 
-// OrderModel is the GORM model for the orders table.
-// AutoMigrate will create/update this table on startup.
 type OrderModel struct {
 	ID           string    `gorm:"primaryKey;column:id;type:varchar(20)"`
 	StockCode    string    `gorm:"column:stock_code;not null;type:varchar(10);index:idx_orders_stock_code;index:idx_orders_stock_side_status,composite:stock_code"`
@@ -19,7 +17,6 @@ type OrderModel struct {
 
 func (OrderModel) TableName() string { return "orders" }
 
-// TradeModel is the GORM model for the trades table.
 type TradeModel struct {
 	ID          string    `gorm:"primaryKey;column:id;type:varchar(20)"`
 	StockCode   string    `gorm:"column:stock_code;not null;type:varchar(10);index:idx_trades_stock_code"`
@@ -32,7 +29,6 @@ type TradeModel struct {
 
 func (TradeModel) TableName() string { return "trades" }
 
-// UserModel is the GORM model for the users table.
 type UserModel struct {
 	ID        string    `gorm:"primaryKey;column:id;type:varchar(20)"`
 	Username  string    `gorm:"column:username;uniqueIndex:idx_users_username;not null;type:varchar(50)"`

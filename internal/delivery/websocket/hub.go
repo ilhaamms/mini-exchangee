@@ -8,19 +8,6 @@ import (
 	"github.com/ilhaamms/ybtech/internal/domain"
 )
 
-// Hub maintains the set of active clients and broadcasts events to them.
-//
-// Non-Blocking Broadcast Strategy:
-// - Each client has a buffered send channel (256 messages)
-// - Broadcast uses select with default to skip slow clients
-// - Slow clients that can't keep up will have messages dropped
-// - This ensures one slow client doesn't block other clients
-//
-// Goroutine Leak Prevention:
-// - When a client disconnects, it sends itself to unregister channel
-// - Hub removes it from clients map and closes the send channel
-// - Closing send channel causes WritePump to exit
-// - ReadPump exits on read error and triggers unregister
 type Hub struct {
 	clients    map[*Client]bool
 	register   chan *Client
@@ -29,18 +16,15 @@ type Hub struct {
 	mu         sync.RWMutex
 }
 
-// NewHub creates a new Hub
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		broadcast:  make(chan domain.Event, 1024), // buffered to prevent blocking producers
+		broadcast:  make(chan domain.Event, 1024), 
 	}
 }
 
-// Run starts the hub's event loop. Must be run as a goroutine.
-// The hub exits only when the broadcast channel is closed (application shutdown).
 func (h *Hub) Run() {
 	for {
 		select {
@@ -61,14 +45,13 @@ func (h *Hub) Run() {
 
 		case event, ok := <-h.broadcast:
 			if !ok {
-				return // channel closed, shutdown
+				return 
 			}
 			h.broadcastEvent(event)
 		}
 	}
 }
 
-// BroadcastEvent sends an event to the broadcast channel (non-blocking)
 func (h *Hub) BroadcastEvent(event domain.Event) {
 	select {
 	case h.broadcast <- event:
@@ -77,7 +60,6 @@ func (h *Hub) BroadcastEvent(event domain.Event) {
 	}
 }
 
-// broadcastEvent sends an event to all subscribed clients (non-blocking per client)
 func (h *Hub) broadcastEvent(event domain.Event) {
 	message, err := json.Marshal(WSResponse{
 		Type:      string(event.Type),
@@ -95,7 +77,7 @@ func (h *Hub) broadcastEvent(event domain.Event) {
 
 	for client := range h.clients {
 		if client.IsSubscribed(event.Channel, event.StockCode) {
-			// Non-blocking send: if client buffer is full, skip it
+			
 			select {
 			case client.send <- message:
 			default:
@@ -106,12 +88,10 @@ func (h *Hub) broadcastEvent(event domain.Event) {
 	}
 }
 
-// Register adds a client to the hub
 func (h *Hub) Register(client *Client) {
 	h.register <- client
 }
 
-// ClientCount returns the number of connected clients
 func (h *Hub) ClientCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

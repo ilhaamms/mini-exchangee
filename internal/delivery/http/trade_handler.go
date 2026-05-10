@@ -7,19 +7,16 @@ import (
 	"github.com/ilhaamms/ybtech/pkg/response"
 )
 
-// TradeHandler handles trade-related HTTP requests
 type TradeHandler struct {
 	tradeRepo repository.TradeRepository
 }
 
-// NewTradeHandler creates a new TradeHandler
 func NewTradeHandler(tradeRepo repository.TradeRepository) *TradeHandler {
 	return &TradeHandler{
 		tradeRepo: tradeRepo,
 	}
 }
 
-// GetTradeHistory handles GET /api/trades?stock=BBCA
 func (h *TradeHandler) GetTradeHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		response.BadRequest(w, "method not allowed, use GET")

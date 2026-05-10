@@ -13,7 +13,7 @@ import (
 var upgrader = ws.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// Allow all origins for development/testing
+	
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -21,16 +21,9 @@ var upgrader = ws.Upgrader{
 
 var clientSeq int64
 
-// HandleWebSocket upgrades an HTTP connection to WebSocket.
-// JWT token is validated via the "token" query parameter:
-//
-//	ws://localhost:8080/ws?token=<jwt>
-//
-// If no token is provided, the connection is still allowed but
-// the client ID will be "anon-X" instead of "user-X (username)".
 func HandleWebSocket(hub *Hub, jwtConfig middleware.JWTConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Optional JWT authentication via query parameter
+		
 		tokenStr := r.URL.Query().Get("token")
 		clientLabel := ""
 
@@ -56,11 +49,11 @@ func HandleWebSocket(hub *Hub, jwtConfig middleware.JWTConfig) http.HandlerFunc 
 
 		hub.Register(client)
 
-		// Start read and write pumps in separate goroutines
+		
 		go client.WritePump()
 		go client.ReadPump()
 
-		// Send welcome message
+		
 		welcomeMsg := "Welcome to Mini Exchange WebSocket."
 		if tokenStr != "" {
 			welcomeMsg += " Authenticated as " + clientLabel + "."

@@ -17,13 +17,11 @@ import (
 
 var userSeq int64
 
-// AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
 	userRepo  repository.UserRepository
 	jwtConfig middleware.JWTConfig
 }
 
-// NewAuthHandler creates a new AuthHandler
 func NewAuthHandler(userRepo repository.UserRepository, jwtConfig middleware.JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		userRepo:  userRepo,
@@ -31,20 +29,17 @@ func NewAuthHandler(userRepo repository.UserRepository, jwtConfig middleware.JWT
 	}
 }
 
-// RegisterRequest represents the request body for user registration
 type RegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// LoginRequest represents the request body for user login
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// Register handles POST /api/register
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.BadRequest(w, "method not allowed, use POST")
@@ -57,7 +52,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input
+	
 	if req.Username == "" {
 		response.BadRequest(w, "username is required")
 		return
@@ -79,10 +74,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hash password using SHA-256 (simple approach; production would use bcrypt)
+	
 	hashedPassword := hashPassword(req.Password)
 
-	// Generate unique user ID
+	
 	userID := fmt.Sprintf("USR%010d", atomic.AddInt64(&userSeq, 1))
 
 	user := &domain.User{
@@ -101,7 +96,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token
+	
 	token, err := middleware.GenerateToken(h.jwtConfig, user)
 	if err != nil {
 		response.InternalError(w, "failed to generate token: "+err.Error())
@@ -119,7 +114,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Login handles POST /api/login
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		response.BadRequest(w, "method not allowed, use POST")
@@ -137,7 +131,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up user
+	
 	user, err := h.userRepo.GetByUsername(req.Username)
 	if err != nil {
 		response.JSON(w, http.StatusUnauthorized, response.APIResponse{
@@ -147,7 +141,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify password
+	
 	if user.Password != hashPassword(req.Password) {
 		response.JSON(w, http.StatusUnauthorized, response.APIResponse{
 			Success: false,
@@ -156,7 +150,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token
+	
 	token, err := middleware.GenerateToken(h.jwtConfig, user)
 	if err != nil {
 		response.InternalError(w, "failed to generate token: "+err.Error())
@@ -173,7 +167,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// hashPassword creates a SHA-256 hash of the password
 func hashPassword(password string) string {
 	hash := sha256.Sum256([]byte(password))
 	return hex.EncodeToString(hash[:])

@@ -8,7 +8,7 @@ import (
 )
 
 // UserRepository provides thread-safe in-memory storage for users
-type UserRepository struct {
+type InMemoryUserRepository struct {
 	mu         sync.RWMutex
 	users      map[string]*domain.User // userID -> User
 	byUsername map[string]*domain.User // username -> User
@@ -16,8 +16,8 @@ type UserRepository struct {
 }
 
 // NewUserRepository creates a new UserRepository
-func NewUserRepository() *UserRepository {
-	return &UserRepository{
+func NewUserRepository() *InMemoryUserRepository {
+	return &InMemoryUserRepository{
 		users:      make(map[string]*domain.User),
 		byUsername: make(map[string]*domain.User),
 		byEmail:    make(map[string]*domain.User),
@@ -25,7 +25,7 @@ func NewUserRepository() *UserRepository {
 }
 
 // Save persists a user to the repository
-func (r *UserRepository) Save(user *domain.User) error {
+func (r *InMemoryUserRepository) Save(user *domain.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -46,7 +46,7 @@ func (r *UserRepository) Save(user *domain.User) error {
 }
 
 // GetByUsername retrieves a user by username
-func (r *UserRepository) GetByUsername(username string) (*domain.User, error) {
+func (r *InMemoryUserRepository) GetByUsername(username string) (*domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -58,7 +58,7 @@ func (r *UserRepository) GetByUsername(username string) (*domain.User, error) {
 }
 
 // GetByID retrieves a user by their ID
-func (r *UserRepository) GetByID(id string) (*domain.User, error) {
+func (r *InMemoryUserRepository) GetByID(id string) (*domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

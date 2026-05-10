@@ -8,22 +8,22 @@ import (
 )
 
 // TradeRepository provides thread-safe in-memory storage for trades
-type TradeRepository struct {
+type InMemoryTradeRepository struct {
 	mu      sync.RWMutex
 	trades  []*domain.Trade
 	byStock map[string][]*domain.Trade
 }
 
 // NewTradeRepository creates a new TradeRepository
-func NewTradeRepository() *TradeRepository {
-	return &TradeRepository{
+func NewTradeRepository() *InMemoryTradeRepository {
+	return &InMemoryTradeRepository{
 		trades:  make([]*domain.Trade, 0),
 		byStock: make(map[string][]*domain.Trade),
 	}
 }
 
 // Save persists a trade to the repository
-func (r *TradeRepository) Save(trade *domain.Trade) error {
+func (r *InMemoryTradeRepository) Save(trade *domain.Trade) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -33,7 +33,7 @@ func (r *TradeRepository) Save(trade *domain.Trade) error {
 }
 
 // GetAll returns all trades sorted by time descending
-func (r *TradeRepository) GetAll() []domain.Trade {
+func (r *InMemoryTradeRepository) GetAll() ([]domain.Trade, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -46,11 +46,11 @@ func (r *TradeRepository) GetAll() []domain.Trade {
 		return results[i].CreatedAt.After(results[j].CreatedAt)
 	})
 
-	return results
+	return results, nil
 }
 
 // GetByStock returns trades for a specific stock code
-func (r *TradeRepository) GetByStock(stockCode string) []domain.Trade {
+func (r *InMemoryTradeRepository) GetByStock(stockCode string) ([]domain.Trade, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -64,14 +64,17 @@ func (r *TradeRepository) GetByStock(stockCode string) []domain.Trade {
 		return results[i].CreatedAt.After(results[j].CreatedAt)
 	})
 
-	return results
+	return results, nil
 }
 
 // GetRecentByStock returns the last N trades for a stock
-func (r *TradeRepository) GetRecentByStock(stockCode string, limit int) []domain.Trade {
-	trades := r.GetByStock(stockCode)
-	if len(trades) > limit {
-		return trades[:limit]
+func (r *InMemoryTradeRepository) GetRecentByStock(stockCode string, limit int) ([]domain.Trade, error) {
+	trades, err := r.GetByStock(stockCode)
+	if err != nil {
+		return nil, err
 	}
-	return trades
+	if len(trades) > limit {
+		return trades[:limit], nil
+	}
+	return trades, nil
 }

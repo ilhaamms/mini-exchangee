@@ -10,7 +10,7 @@ import (
 	"github.com/ilhaamms/ybtech/internal/repository"
 )
 
-func setupEngine() (*MatchingEngine, *repository.OrderRepository, *repository.TradeRepository, *repository.MarketRepository) {
+func setupEngine() (*MatchingEngine, *repository.InMemoryOrderRepository, *repository.InMemoryTradeRepository, *repository.MarketRepository) {
 	orderRepo := repository.NewOrderRepository()
 	tradeRepo := repository.NewTradeRepository()
 	marketRepo := repository.NewMarketRepository()
@@ -40,7 +40,7 @@ func TestMatchingEngine_BasicMatch(t *testing.T) {
 	engine.ProcessOrder(buy)
 
 	// Verify trade was created
-	trades := tradeRepo.GetAll()
+	trades, _ := tradeRepo.GetAll()
 	if len(trades) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
@@ -73,7 +73,7 @@ func TestMatchingEngine_NoMatch_PriceMismatch(t *testing.T) {
 	orderRepo.Save(buy)
 	engine.ProcessOrder(buy)
 
-	trades := tradeRepo.GetAll()
+	trades, _ := tradeRepo.GetAll()
 	if len(trades) != 0 {
 		t.Fatalf("expected 0 trades, got %d", len(trades))
 	}
@@ -91,7 +91,7 @@ func TestMatchingEngine_PartialFill(t *testing.T) {
 	orderRepo.Save(buy)
 	engine.ProcessOrder(buy)
 
-	trades := tradeRepo.GetAll()
+	trades, _ := tradeRepo.GetAll()
 	if len(trades) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
@@ -129,7 +129,7 @@ func TestMatchingEngine_FIFOMatching(t *testing.T) {
 	orderRepo.Save(buy)
 	engine.ProcessOrder(buy)
 
-	trades := tradeRepo.GetAll()
+	trades, _ := tradeRepo.GetAll()
 	if len(trades) != 2 {
 		t.Fatalf("expected 2 trades, got %d", len(trades))
 	}
@@ -171,7 +171,7 @@ func TestMatchingEngine_ConcurrentOrders(t *testing.T) {
 	wg.Wait()
 
 	// All 100 sell orders should be filled
-	trades := tradeRepo.GetAll()
+	trades, _ := tradeRepo.GetAll()
 	if len(trades) != 100 {
 		t.Errorf("expected 100 trades, got %d", len(trades))
 	}

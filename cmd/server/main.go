@@ -9,14 +9,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ilhaamms/ybtech/internal/config"
 	httpDelivery "github.com/ilhaamms/ybtech/internal/delivery/http"
 	"github.com/ilhaamms/ybtech/internal/delivery/http/middleware"
 	wsDelivery "github.com/ilhaamms/ybtech/internal/delivery/websocket"
 	"github.com/ilhaamms/ybtech/internal/domain"
 	"github.com/ilhaamms/ybtech/internal/engine"
 	infraNats "github.com/ilhaamms/ybtech/internal/infrastructure/nats"
+	infraPostgres "github.com/ilhaamms/ybtech/internal/infrastructure/postgres"
 	infraRedis "github.com/ilhaamms/ybtech/internal/infrastructure/redis"
-	"github.com/ilhaamms/ybtech/internal/config"
 	"github.com/ilhaamms/ybtech/internal/repository"
 	"github.com/ilhaamms/ybtech/internal/simulator"
 )
@@ -29,10 +30,25 @@ func main() {
 	cfg := config.Load()
 
 	// ─── Initialize Repositories (In-Memory Storage) ───
-	orderRepo := repository.NewOrderRepository()
-	tradeRepo := repository.NewTradeRepository()
+	var orderRepo repository.OrderRepository = repository.NewOrderRepository()
+	var tradeRepo repository.TradeRepository = repository.NewTradeRepository()
 	marketRepo := repository.NewMarketRepository()
-	userRepo := repository.NewUserRepository()
+	var userRepo repository.UserRepository = repository.NewUserRepository()
+
+	// ─── [BONUS] PostgreSQL Integration ───
+	var pgDB *infraPostgres.DB
+	if cfg.PostgresEnabled {
+		var err error
+		pgDB, err = infraPostgres.NewDB(cfg.PostgresDSN)
+		if err != nil {
+			log.Printf("WARNING: PostgreSQL connection failed: %v (continuing with in-memory storage)", err)
+		} else {
+			orderRepo = infraPostgres.NewOrderRepository(pgDB)
+			tradeRepo = infraPostgres.NewTradeRepository(pgDB)
+			userRepo = infraPostgres.NewUserRepository(pgDB)
+			log.Println("POSTGRES: using PostgreSQL for order, trade, and user storage")
+		}
+	}
 
 	// ─── Initialize WebSocket Hub ───
 	hub := wsDelivery.NewHub()
@@ -214,6 +230,11 @@ func main() {
 	}
 	if redisClient != nil {
 		redisClient.Close()
+	}
+
+	// Stop PostgreSQL
+	if pgDB != nil {
+		pgDB.Close()
 	}
 
 	// Shutdown HTTP server with timeout

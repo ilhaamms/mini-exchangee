@@ -22,9 +22,9 @@ const (
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	SecretKey     string
-	TokenExpiry   time.Duration
-	Issuer        string
+	SecretKey   string
+	TokenExpiry time.Duration
+	Issuer      string
 }
 
 // DefaultJWTConfig returns the default JWT configuration

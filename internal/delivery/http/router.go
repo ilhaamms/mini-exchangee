@@ -38,10 +38,10 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 // RouterConfig holds dependencies needed by the router
 type RouterConfig struct {
-	OrderRepo      *repository.OrderRepository
-	TradeRepo      *repository.TradeRepository
+	OrderRepo      repository.OrderRepository
+	TradeRepo      repository.TradeRepository
 	MarketRepo     *repository.MarketRepository
-	UserRepo       *repository.UserRepository
+	UserRepo       repository.UserRepository
 	MatchingEngine *engine.MatchingEngine
 	Hub            *websocket.Hub
 	JWTConfig      middleware.JWTConfig

@@ -1,106 +1,82 @@
 package postgres
 
 import (
-	"database/sql"
 	"log"
 
 	"github.com/ilhaamms/ybtech/internal/domain"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// TradeRepository provides PostgreSQL-backed storage for trades
+// TradeRepository provides GORM-backed storage for trades
 type TradeRepository struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-// NewTradeRepository creates a new PostgreSQL trade repository
+// NewTradeRepository creates a new GORM trade repository
 func NewTradeRepository(db *DB) *TradeRepository {
 	return &TradeRepository{db: db.GetConn()}
 }
 
-// Save inserts a trade into the database
+// Save inserts a trade (ignore duplicate)
 func (r *TradeRepository) Save(trade *domain.Trade) error {
-	query := `
-		INSERT INTO trades (id, stock_code, buy_order_id, sell_order_id, price, quantity, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (id) DO NOTHING
-	`
-	_, err := r.db.Exec(query,
-		trade.ID, trade.StockCode, trade.BuyOrderID, trade.SellOrderID,
-		trade.Price, trade.Quantity, trade.CreatedAt,
-	)
-	if err != nil {
-		log.Printf("POSTGRES: failed to save trade %s: %v", trade.ID, err)
+	m := TradeModel{
+		ID:          trade.ID,
+		StockCode:   trade.StockCode,
+		BuyOrderID:  trade.BuyOrderID,
+		SellOrderID: trade.SellOrderID,
+		Price:       trade.Price,
+		Quantity:    trade.Quantity,
+		CreatedAt:   trade.CreatedAt,
 	}
-	return err
+	result := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&m)
+	if result.Error != nil {
+		log.Printf("POSTGRES: failed to save trade %s: %v", trade.ID, result.Error)
+	}
+	return result.Error
 }
 
 // GetAll returns all trades sorted by time descending
 func (r *TradeRepository) GetAll() ([]domain.Trade, error) {
-	query := `SELECT id, stock_code, buy_order_id, sell_order_id, price, quantity, created_at FROM trades ORDER BY created_at DESC`
-
-	rows, err := r.db.Query(query)
-	if err != nil {
-		return nil, err
+	var models []TradeModel
+	if result := r.db.Order("created_at DESC").Find(&models); result.Error != nil {
+		return nil, result.Error
 	}
-	defer rows.Close()
-
-	var trades []domain.Trade
-	for rows.Next() {
-		var t domain.Trade
-		if err := rows.Scan(&t.ID, &t.StockCode, &t.BuyOrderID, &t.SellOrderID,
-			&t.Price, &t.Quantity, &t.CreatedAt); err != nil {
-			continue
-		}
-		trades = append(trades, t)
-	}
-
-	return trades, nil
+	return tradeModelsToDomain(models), nil
 }
 
 // GetByStock returns trades for a specific stock code
 func (r *TradeRepository) GetByStock(stockCode string) ([]domain.Trade, error) {
-	query := `SELECT id, stock_code, buy_order_id, sell_order_id, price, quantity, created_at
-	          FROM trades WHERE stock_code = $1 ORDER BY created_at DESC`
-
-	rows, err := r.db.Query(query, stockCode)
-	if err != nil {
-		return nil, err
+	var models []TradeModel
+	result := r.db.Where("stock_code = ?", stockCode).Order("created_at DESC").Find(&models)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	defer rows.Close()
-
-	var trades []domain.Trade
-	for rows.Next() {
-		var t domain.Trade
-		if err := rows.Scan(&t.ID, &t.StockCode, &t.BuyOrderID, &t.SellOrderID,
-			&t.Price, &t.Quantity, &t.CreatedAt); err != nil {
-			continue
-		}
-		trades = append(trades, t)
-	}
-
-	return trades, nil
+	return tradeModelsToDomain(models), nil
 }
 
 // GetRecentByStock returns the last N trades for a stock
 func (r *TradeRepository) GetRecentByStock(stockCode string, limit int) ([]domain.Trade, error) {
-	query := `SELECT id, stock_code, buy_order_id, sell_order_id, price, quantity, created_at
-	          FROM trades WHERE stock_code = $1 ORDER BY created_at DESC LIMIT $2`
-
-	rows, err := r.db.Query(query, stockCode, limit)
-	if err != nil {
-		return nil, err
+	var models []TradeModel
+	result := r.db.Where("stock_code = ?", stockCode).Order("created_at DESC").Limit(limit).Find(&models)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	defer rows.Close()
+	return tradeModelsToDomain(models), nil
+}
 
-	var trades []domain.Trade
-	for rows.Next() {
-		var t domain.Trade
-		if err := rows.Scan(&t.ID, &t.StockCode, &t.BuyOrderID, &t.SellOrderID,
-			&t.Price, &t.Quantity, &t.CreatedAt); err != nil {
-			continue
+func tradeModelsToDomain(models []TradeModel) []domain.Trade {
+	trades := make([]domain.Trade, len(models))
+	for i, m := range models {
+		trades[i] = domain.Trade{
+			ID:          m.ID,
+			StockCode:   m.StockCode,
+			BuyOrderID:  m.BuyOrderID,
+			SellOrderID: m.SellOrderID,
+			Price:       m.Price,
+			Quantity:    m.Quantity,
+			CreatedAt:   m.CreatedAt,
 		}
-		trades = append(trades, t)
 	}
-
-	return trades, nil
+	return trades
 }

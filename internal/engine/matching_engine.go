@@ -24,19 +24,19 @@ type EventCallback func(event domain.Event)
 // - Order.Fill() uses its own internal mutex for field updates
 // - Repository operations are also internally synchronized
 type MatchingEngine struct {
-	mu          sync.Mutex
-	stockMu     map[string]*sync.Mutex
-	orderRepo   *repository.OrderRepository
-	tradeRepo   *repository.TradeRepository
-	marketRepo  *repository.MarketRepository
-	onEvent     EventCallback
-	tradeSeq    int64
+	mu         sync.Mutex
+	stockMu    map[string]*sync.Mutex
+	orderRepo  repository.OrderRepository
+	tradeRepo  repository.TradeRepository
+	marketRepo *repository.MarketRepository
+	onEvent    EventCallback
+	tradeSeq   int64
 }
 
 // NewMatchingEngine creates a new matching engine
 func NewMatchingEngine(
-	orderRepo *repository.OrderRepository,
-	tradeRepo *repository.TradeRepository,
+	orderRepo repository.OrderRepository,
+	tradeRepo repository.TradeRepository,
 	marketRepo *repository.MarketRepository,
 	onEvent EventCallback,
 ) *MatchingEngine {
@@ -83,7 +83,11 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 	}
 
 	// Get opposite side orders sorted by FIFO (creation time)
-	oppositeOrders := e.orderRepo.GetOpenOrdersByStock(order.StockCode, oppositeSide)
+	oppositeOrders, err := e.orderRepo.GetOpenOrdersByStock(order.StockCode, oppositeSide)
+	if err != nil {
+		log.Printf("ERROR: failed to get open orders for %s: %v", order.StockCode, err)
+		return
+	}
 
 	for _, counterOrder := range oppositeOrders {
 		if order.GetRemainingQty() <= 0 {
@@ -107,6 +111,14 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 		// Execute the fill on both orders
 		order.Fill(fillQty)
 		counterOrder.Fill(fillQty)
+
+		// Persist the updated order statuses (no-op for in-memory, actual UPDATE for postgres)
+		if err := e.orderRepo.UpdateStatus(order); err != nil {
+			log.Printf("ERROR: failed to update order status %s: %v", order.ID, err)
+		}
+		if err := e.orderRepo.UpdateStatus(counterOrder); err != nil {
+			log.Printf("ERROR: failed to update order status %s: %v", counterOrder.ID, err)
+		}
 
 		// Generate trade ID
 		e.tradeSeq++
@@ -186,8 +198,8 @@ func (e *MatchingEngine) GetOrderBook(stockCode string) domain.OrderBook {
 	stockMu.Lock()
 	defer stockMu.Unlock()
 
-	buyOrders := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideBuy)
-	sellOrders := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideSell)
+	buyOrders, _ := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideBuy)
+	sellOrders, _ := e.orderRepo.GetOpenOrdersByStock(stockCode, domain.SideSell)
 
 	// Aggregate bids by price level
 	bidMap := make(map[float64]*domain.OrderBookEntry)

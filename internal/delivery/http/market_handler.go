@@ -12,14 +12,14 @@ import (
 // MarketHandler handles market data HTTP requests
 type MarketHandler struct {
 	marketRepo *repository.MarketRepository
-	tradeRepo  *repository.TradeRepository
+	tradeRepo  repository.TradeRepository
 	engine     *engine.MatchingEngine
 }
 
 // NewMarketHandler creates a new MarketHandler
 func NewMarketHandler(
 	marketRepo *repository.MarketRepository,
-	tradeRepo *repository.TradeRepository,
+	tradeRepo repository.TradeRepository,
 	engine *engine.MatchingEngine,
 ) *MarketHandler {
 	return &MarketHandler{
@@ -90,7 +90,11 @@ func (h *MarketHandler) GetRecentTrades(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	trades := h.tradeRepo.GetRecentByStock(stock, limit)
+	trades, err := h.tradeRepo.GetRecentByStock(stock, limit)
+	if err != nil {
+		response.InternalError(w, "failed to retrieve trades: "+err.Error())
+		return
+	}
 	response.Success(w, "recent trades retrieved successfully", map[string]interface{}{
 		"trades": trades,
 		"count":  len(trades),

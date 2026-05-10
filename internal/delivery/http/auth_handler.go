@@ -19,12 +19,12 @@ var userSeq int64
 
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
-	userRepo  *repository.UserRepository
+	userRepo  repository.UserRepository
 	jwtConfig middleware.JWTConfig
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(userRepo *repository.UserRepository, jwtConfig middleware.JWTConfig) *AuthHandler {
+func NewAuthHandler(userRepo repository.UserRepository, jwtConfig middleware.JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		userRepo:  userRepo,
 		jwtConfig: jwtConfig,

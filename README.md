@@ -23,8 +23,9 @@ Golang backend untuk mini realtime trading system yang mendukung REST API, WebSo
 
 - Go 1.21 atau lebih baru
 - Git
+- PostgreSQL (jika ingin pakai persistent storage)
 
-### Langkah
+### Langkah (Mode In-Memory — tanpa database)
 
 ```bash
 # Clone repository
@@ -34,12 +35,59 @@ cd ybtech
 # Download dependencies
 go mod tidy
 
-# Jalankan server
+# Jalankan server (default: semua storage in-memory)
 go run cmd/server/main.go
+```
 
-# Atau build dulu lalu jalankan
-go build -o mini-exchange.exe cmd/server/main.go
-./mini-exchange.exe
+### Langkah (Mode PostgreSQL — data persisten)
+
+> **Wajib buat database terlebih dahulu sebelum menjalankan server.**
+
+**1. Buat database di PostgreSQL:**
+```sql
+CREATE DATABASE mini_exchange;
+```
+
+Atau lewat terminal:
+```bash
+psql -U postgres -c "CREATE DATABASE mini_exchange;"
+```
+
+**2. Salin dan isi file konfigurasi:**
+```bash
+cp .env.example .env
+```
+
+Edit `.env` dan sesuaikan:
+```env
+POSTGRES_ENABLED=true
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your-password-here
+POSTGRES_DB=mini_exchange
+POSTGRES_SSLMODE=disable
+```
+
+**3. Jalankan server — tabel dibuat otomatis (GORM AutoMigrate):**
+```bash
+go run cmd/server/main.go
+```
+
+Server akan mencetak:
+```
+POSTGRES: connected successfully
+POSTGRES: auto-migration completed successfully
+```
+
+Tabel `orders`, `trades`, dan `users` akan dibuat otomatis di database.
+
+---
+
+**Build binary:**
+```bash
+go build -o mini-exchange cmd/server/main.go
+./mini-exchange
 ```
 
 Server berjalan di `http://localhost:8080` (default). Gunakan env `PORT` untuk ubah port:
@@ -651,8 +699,8 @@ Sesuai dengan spesifikasi test:
 **Asumsi tambahan:**
 - Harga dalam **float64** (untuk simplicity, real system pakai integer basis point)
 - Order ID auto-generated menggunakan **atomic counter** (thread-safe)
-- Tidak ada authentication (fokus backend & realtime)
-- Data **in-memory only** (hilang saat restart)
+- Authentication via JWT (opt-in), diaktifkan secara default di routing
+- Storage **in-memory** by default (hilang saat restart); aktifkan `POSTGRES_ENABLED=true` untuk data persisten
 - 5 stock simulasi: BBCA, BBRI, TLKM, ASII, BMRI
 
 ---
@@ -771,11 +819,24 @@ REDIS_ENABLED=true REDIS_ADDR=localhost:6379 go run cmd/server/main.go
 
 ### 4. PostgreSQL Persistence
 
+> **Pastikan database `mini_exchange` sudah dibuat terlebih dahulu** (lihat [Langkah Mode PostgreSQL](#langkah-mode-postgresql--data-persisten)).
+
 ```bash
-POSTGRES_ENABLED=true POSTGRES_DSN="postgres://user:pass@localhost:5432/mini_exchange?sslmode=disable" go run cmd/server/main.go
+POSTGRES_ENABLED=true \
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=5432 \
+POSTGRES_USER=postgres \
+POSTGRES_PASSWORD=postgres \
+POSTGRES_DB=mini_exchange \
+go run cmd/server/main.go
 ```
 
-Auto-migration membuat tabel `orders`, `trades`, dan `users`. SQL manual: `migrations/001_create_tables.sql`.
+Atau cukup set di `.env` lalu jalankan biasa:
+```bash
+go run cmd/server/main.go
+```
+
+GORM **AutoMigrate** membuat/memperbarui tabel `orders`, `trades`, dan `users` secara otomatis saat server start. Tidak perlu jalankan SQL migration manual.
 
 ### 5. NATS Message Broker
 
@@ -805,7 +866,12 @@ Mengganti price simulator dengan data real dari Binance WebSocket (crypto: BTCUS
 | `REDIS_ADDR` | `localhost:6379` | Redis address |
 | `REDIS_PASSWORD` | `` | Redis password |
 | `POSTGRES_ENABLED` | `false` | Enable PostgreSQL persistence |
-| `POSTGRES_DSN` | `postgres://...` | PostgreSQL connection string |
+| `POSTGRES_HOST` | `localhost` | PostgreSQL host |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_USER` | `postgres` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
+| `POSTGRES_DB` | `mini_exchange` | Nama database |
+| `POSTGRES_SSLMODE` | `disable` | SSL mode (`disable`/`require`/`verify-full`) |
 | `NATS_ENABLED` | `false` | Enable NATS message broker |
 | `NATS_URL` | `nats://localhost:4222` | NATS server URL |
 | `BINANCE_ENABLED` | `false` | Enable Binance real market data |
@@ -818,7 +884,8 @@ Mengganti price simulator dengan data real dari Binance WebSocket (crypto: BTCUS
 - **WebSocket**: [gorilla/websocket](https://github.com/gorilla/websocket)
 - **HTTP**: Standard `net/http` library
 - **Auth**: [golang-jwt/jwt](https://github.com/golang-jwt/jwt) (JWT v5)
-- **Storage**: In-memory (default) + PostgreSQL (opt-in)
+- **Storage**: In-memory (default) + PostgreSQL via [GORM](https://gorm.io) (opt-in)
+- **ORM**: [GORM v2](https://gorm.io) + `gorm.io/driver/postgres` — AutoMigrate, upsert, query builder
 - **Cache/PubSub**: [go-redis](https://github.com/redis/go-redis) (opt-in)
 - **Message Broker**: [nats.go](https://github.com/nats-io/nats.go) (opt-in)
 - **Architecture**: Clean Architecture

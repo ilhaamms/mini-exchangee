@@ -16,14 +16,14 @@ var orderSeq int64
 
 // OrderHandler handles order-related HTTP requests
 type OrderHandler struct {
-	orderRepo  *repository.OrderRepository
+	orderRepo  repository.OrderRepository
 	marketRepo *repository.MarketRepository
 	engine     *engine.MatchingEngine
 }
 
 // NewOrderHandler creates a new OrderHandler
 func NewOrderHandler(
-	orderRepo *repository.OrderRepository,
+	orderRepo repository.OrderRepository,
 	marketRepo *repository.MarketRepository,
 	engine *engine.MatchingEngine,
 ) *OrderHandler {
@@ -105,7 +105,11 @@ func (h *OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	stock := r.URL.Query().Get("stock")
 	status := r.URL.Query().Get("status")
 
-	orders := h.orderRepo.GetAll(stock, status)
+	orders, err := h.orderRepo.GetAll(stock, status)
+	if err != nil {
+		response.InternalError(w, "failed to retrieve orders: "+err.Error())
+		return
+	}
 
 	response.Success(w, "orders retrieved successfully", map[string]interface{}{
 		"orders": orders,

@@ -9,11 +9,11 @@ import (
 
 // TradeHandler handles trade-related HTTP requests
 type TradeHandler struct {
-	tradeRepo *repository.TradeRepository
+	tradeRepo repository.TradeRepository
 }
 
 // NewTradeHandler creates a new TradeHandler
-func NewTradeHandler(tradeRepo *repository.TradeRepository) *TradeHandler {
+func NewTradeHandler(tradeRepo repository.TradeRepository) *TradeHandler {
 	return &TradeHandler{
 		tradeRepo: tradeRepo,
 	}
@@ -30,13 +30,21 @@ func (h *TradeHandler) GetTradeHistory(w http.ResponseWriter, r *http.Request) {
 
 	var trades interface{}
 	if stock != "" {
-		t := h.tradeRepo.GetByStock(stock)
+		t, err := h.tradeRepo.GetByStock(stock)
+		if err != nil {
+			response.InternalError(w, "failed to retrieve trades: "+err.Error())
+			return
+		}
 		trades = map[string]interface{}{
 			"trades": t,
 			"count":  len(t),
 		}
 	} else {
-		t := h.tradeRepo.GetAll()
+		t, err := h.tradeRepo.GetAll()
+		if err != nil {
+			response.InternalError(w, "failed to retrieve trades: "+err.Error())
+			return
+		}
 		trades = map[string]interface{}{
 			"trades": t,
 			"count":  len(t),

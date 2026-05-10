@@ -9,22 +9,22 @@ import (
 )
 
 // OrderRepository provides thread-safe in-memory storage for orders
-type OrderRepository struct {
-	mu     sync.RWMutex
-	orders map[string]*domain.Order   // orderID -> Order
+type InMemoryOrderRepository struct {
+	mu      sync.RWMutex
+	orders  map[string]*domain.Order   // orderID -> Order
 	byStock map[string][]*domain.Order // stockCode -> orders (FIFO)
 }
 
 // NewOrderRepository creates a new OrderRepository
-func NewOrderRepository() *OrderRepository {
-	return &OrderRepository{
+func NewOrderRepository() *InMemoryOrderRepository {
+	return &InMemoryOrderRepository{
 		orders:  make(map[string]*domain.Order),
 		byStock: make(map[string][]*domain.Order),
 	}
 }
 
 // Save persists an order to the repository
-func (r *OrderRepository) Save(order *domain.Order) error {
+func (r *InMemoryOrderRepository) Save(order *domain.Order) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -34,7 +34,7 @@ func (r *OrderRepository) Save(order *domain.Order) error {
 }
 
 // GetByID retrieves an order by its ID
-func (r *OrderRepository) GetByID(id string) (*domain.Order, error) {
+func (r *InMemoryOrderRepository) GetByID(id string) (*domain.Order, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -46,7 +46,7 @@ func (r *OrderRepository) GetByID(id string) (*domain.Order, error) {
 }
 
 // GetAll returns all orders, optionally filtered by stock and status
-func (r *OrderRepository) GetAll(stockCode string, status string) []domain.Order {
+func (r *InMemoryOrderRepository) GetAll(stockCode string, status string) ([]domain.Order, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -67,11 +67,16 @@ func (r *OrderRepository) GetAll(stockCode string, status string) []domain.Order
 		return results[i].CreatedAt.After(results[j].CreatedAt)
 	})
 
-	return results
+	return results, nil
+}
+
+// UpdateStatus is a no-op for in-memory storage; order fields are updated via pointer mutation.
+func (r *InMemoryOrderRepository) UpdateStatus(order *domain.Order) error {
+	return nil
 }
 
 // GetOpenOrdersByStock returns all open/partial orders for a stock, sorted by FIFO
-func (r *OrderRepository) GetOpenOrdersByStock(stockCode string, side domain.Side) []*domain.Order {
+func (r *InMemoryOrderRepository) GetOpenOrdersByStock(stockCode string, side domain.Side) ([]*domain.Order, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -88,5 +93,5 @@ func (r *OrderRepository) GetOpenOrdersByStock(stockCode string, side domain.Sid
 		return results[i].CreatedAt.Before(results[j].CreatedAt)
 	})
 
-	return results
+	return results, nil
 }

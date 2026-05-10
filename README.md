@@ -30,7 +30,7 @@ Golang backend untuk mini realtime trading system yang mendukung REST API, WebSo
 ```bash
 # Clone repository
 git clone https://github.com/ilhaamms/mini-exchangee.git
-cd ybtech
+cd mini-exchangee
 
 # Download dependencies
 go mod tidy

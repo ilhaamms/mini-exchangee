@@ -48,30 +48,22 @@ type RouterConfig struct {
 func NewRouter(cfg RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
-	
 	orderHandler := NewOrderHandler(cfg.OrderRepo, cfg.MarketRepo, cfg.MatchingEngine)
 	tradeHandler := NewTradeHandler(cfg.TradeRepo)
 	marketHandler := NewMarketHandler(cfg.MarketRepo, cfg.TradeRepo, cfg.MatchingEngine)
 	authHandler := NewAuthHandler(cfg.UserRepo, cfg.JWTConfig)
 
-	
-
-	
 	mux.HandleFunc("/api/register", authHandler.Register)
 	mux.HandleFunc("/api/login", authHandler.Login)
 
-	
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","service":"mini-exchange"}`))
 	})
 
-	
-
 	authMw := middleware.AuthMiddleware(cfg.JWTConfig)
 
-	
 	mux.Handle("/api/orders", authMw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
@@ -83,19 +75,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 	})))
 
-	
 	mux.Handle("/api/trades", authMw(http.HandlerFunc(tradeHandler.GetTradeHistory)))
 
-	
 	mux.HandleFunc("/api/market/ticker", marketHandler.GetTicker)
 	mux.HandleFunc("/api/market/orderbook", marketHandler.GetOrderBook)
 	mux.HandleFunc("/api/market/trades", marketHandler.GetRecentTrades)
 
-	
 	mux.HandleFunc("/ws", websocket.HandleWebSocket(cfg.Hub, cfg.JWTConfig))
 
-	
-	
 	handler := corsMiddleware(
 		loggingMiddleware(
 			middleware.RateLimitMiddleware(cfg.RateLimiter)(mux),

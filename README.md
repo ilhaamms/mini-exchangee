@@ -119,12 +119,12 @@ d:\trading\
 │   │   ├── trade.go             # Trade entity
 │   │   ├── market.go            # MarketData, Ticker, OrderBook entities
 │   │   ├── event.go             # Event types untuk broadcast
-│   │   └── user.go              # [BONUS] User entity + JWT claims
+│   │   └── user.go              #  User entity + JWT claims
 │   ├── repository/              # Data access layer (in-memory)
 │   │   ├── order_repository.go
 │   │   ├── trade_repository.go
 │   │   ├── market_repository.go
-│   │   └── user_repository.go   # [BONUS] In-memory user store
+│   │   └── user_repository.go   #  In-memory user store
 │   ├── engine/                  # Core business logic
 │   │   ├── matching_engine.go   # Price-time priority matching
 │   │   └── matching_engine_test.go
@@ -134,15 +134,15 @@ d:\trading\
 │   │   │   ├── order_handler.go
 │   │   │   ├── trade_handler.go
 │   │   │   ├── market_handler.go
-│   │   │   ├── auth_handler.go  # [BONUS] Login/Register endpoints
+│   │   │   ├── auth_handler.go  #  Login/Register endpoints
 │   │   │   └── middleware/
-│   │   │       ├── auth.go      # [BONUS] JWT middleware
-│   │   │       └── rate_limiter.go # [BONUS] Token bucket rate limiter
+│   │   │       ├── auth.go      #  JWT middleware
+│   │   │       └── rate_limiter.go #  Token bucket rate limiter
 │   │   └── websocket/           # WebSocket layer
 │   │       ├── hub.go           # Central event hub
 │   │       ├── client.go        # Per-client connection manager
 │   │       └── handler.go       # HTTP upgrade handler (JWT support)
-│   ├── infrastructure/          # [BONUS] External service integrations
+│   ├── infrastructure/          #  External service integrations
 │   │   ├── redis/
 │   │   │   ├── redis.go         # Redis client wrapper
 │   │   │   ├── pubsub.go        # Cross-node event broadcasting
@@ -155,7 +155,7 @@ d:\trading\
 │   │       └── nats.go          # NATS pub/sub broker
 │   └── simulator/               # Price simulation
 │       ├── price_simulator.go   # Random walk simulator
-│       └── binance_feed.go      # [BONUS] Binance real market data
+│       └── binance_feed.go      #  Binance real market data
 ├── migrations/
 │   └── 001_create_tables.sql    # PostgreSQL schema
 └── pkg/response/                # Shared utilities

@@ -29,7 +29,7 @@ Golang backend untuk mini realtime trading system yang mendukung REST API, WebSo
 
 ```bash
 # Clone repository
-git clone https://github.com/ilhaamms/ybtech.git
+git clone https://github.com/ilhaamms/mini-exchangee.git
 cd ybtech
 
 # Download dependencies

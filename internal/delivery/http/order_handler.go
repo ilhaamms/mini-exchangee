@@ -51,7 +51,6 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
 	if req.StockCode == "" {
 		response.BadRequest(w, "stock_code is required")
 		return
@@ -69,24 +68,18 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	
 	orderID := fmt.Sprintf("ORD%010d", atomic.AddInt64(&orderSeq, 1))
 
-	
 	h.marketRepo.GetOrCreate(req.StockCode, req.Price)
 
-	
 	order := domain.NewOrder(orderID, req.StockCode, domain.Side(req.Side), req.Price, req.Quantity)
 
-	
 	if err := h.orderRepo.Save(order); err != nil {
 		response.InternalError(w, "failed to save order: "+err.Error())
 		return
 	}
 
-	
-	
-	go h.engine.ProcessOrder(order)
+	h.engine.ProcessOrder(order)
 
 	response.Created(w, "order created successfully", order.ToSnapshot())
 }

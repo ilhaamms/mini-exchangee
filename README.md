@@ -187,19 +187,25 @@ Client POST /api/orders
   │     │
   │     ├─→ OrderRepository.Save() (persist order)
   │     │
-  │     └─→ goroutine: MatchingEngine.ProcessOrder()
+  │     └─→ MatchingEngine.ProcessOrder() ← synchronous, dalam request handler
   │           │
   │           ├─→ Lock per-stock mutex
   │           ├─→ Get opposite side open orders (FIFO sorted)
   │           ├─→ For each compatible order:
   │           │     ├─→ Fill both orders (atomic update)
+  │           │     ├─→ Update order status (UpdateStatus)
   │           │     ├─→ Create Trade record
   │           │     ├─→ Update MarketData (price, volume)
   │           │     └─→ Emit events → WebSocket Hub
   │           └─→ Unlock mutex
   │
-  └─→ Return 201 Created (immediate, non-blocking)
+  └─→ Return 201 Created (order + status sudah final setelah matching)
 ```
+
+> **Catatan desain**: Matching dijalankan **synchronous** di dalam request handler.
+> Per-stock mutex memastikan BBCA tidak blocking BBRI, sehingga tetap paralel antar stock.
+> Pendekatan ini menjamin konsistensi — order book dan status order selalu up-to-date
+> saat response 201 dikembalikan ke client.
 
 ### 2. WebSocket Event Flow
 
@@ -559,11 +565,12 @@ ws.onopen = () => ws.send(JSON.stringify({
 
 | Skenario | Masalah | Solusi |
 |----------|---------|--------|
-| 2 buy order masuk bersamaan untuk stock yang sama | Bisa match sell order yang sama 2x (double fill) | **Per-stock mutex** di matching engine. Hanya 1 goroutine memproses matching per stock |
+| 2 buy order masuk bersamaan untuk stock yang sama | Bisa match sell order yang sama 2x (double fill) | **Per-stock mutex** di matching engine. Matching dijalankan synchronous — hanya 1 request memproses matching per stock dalam satu waktu |
 | Order field di-update concurrent (Fill) | Data inconsistency pada `filled_qty`, `remaining_qty`, `status` | **sync.RWMutex** di struct Order untuk atomic field update |
 | Repository read/write concurrent | Concurrent map read/write panic | **sync.RWMutex** di setiap repository |
 | WebSocket client map concurrent access | Panic saat iterating & modifying map | **sync.RWMutex** di Hub untuk clients map |
 | Client subscribe/unsubscribe while broadcast | Race pada subscriptions map | **sync.RWMutex** di Client untuk subscriptions |
+| Order book tidak konsisten saat langsung dicek setelah submit | Matching belum selesai saat response dikirim (async race) | Matching **synchronous** — response 201 hanya dikirim setelah matching dan `UpdateStatus` selesai |
 
 ### Strategi Concurrency
 

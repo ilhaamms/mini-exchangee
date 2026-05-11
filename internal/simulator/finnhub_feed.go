@@ -48,6 +48,7 @@ type FinnhubFeed struct {
 	marketRepo *repository.MarketRepository
 	onEvent    func(event domain.Event)
 	conn       *ws.Conn
+	connMu     sync.Mutex
 	done       chan struct{}
 	wg         sync.WaitGroup
 }
@@ -76,7 +77,9 @@ func (f *FinnhubFeed) Start() error {
 	if err != nil {
 		return err
 	}
+	f.connMu.Lock()
 	f.conn = conn
+	f.connMu.Unlock()
 
 	// Subscribe to all configured symbols.
 	for finnhubSymbol := range FinnhubSymbolMap {
@@ -175,7 +178,9 @@ func (f *FinnhubFeed) reconnect() error {
 		}
 	}
 
+	f.connMu.Lock()
 	f.conn = conn
+	f.connMu.Unlock()
 	slog.Info("FINNHUB: reconnected successfully")
 	return nil
 }
@@ -184,9 +189,11 @@ func (f *FinnhubFeed) reconnect() error {
 func (f *FinnhubFeed) Stop() {
 	slog.Info("FINNHUB: stopping feed")
 	close(f.done)
+	f.connMu.Lock()
 	if f.conn != nil {
 		f.conn.Close()
 	}
+	f.connMu.Unlock()
 	f.wg.Wait()
 	slog.Info("FINNHUB: feed stopped")
 }

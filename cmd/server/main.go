@@ -79,9 +79,9 @@ func main() {
 
 			originalOnEvent := onEvent
 			onEvent = func(event domain.Event) {
-				originalOnEvent(event)
 				if err := redisPubSub.Publish(context.Background(), event); err != nil {
 					log.Printf("WARNING: Redis publish failed: %v", err)
+					originalOnEvent(event)
 				}
 
 				if event.Type == domain.EventTicker {

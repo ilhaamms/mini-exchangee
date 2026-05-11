@@ -64,9 +64,14 @@ func ParseToken(config JWTConfig, tokenString string) (*domain.UserClaims, error
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userID, ok1 := claims["user_id"].(string)
+		username, ok2 := claims["username"].(string)
+		if !ok1 || !ok2 {
+			return nil, jwt.ErrSignatureInvalid
+		}
 		return &domain.UserClaims{
-			UserID:   claims["user_id"].(string),
-			Username: claims["username"].(string),
+			UserID:   userID,
+			Username: username,
 		}, nil
 	}
 

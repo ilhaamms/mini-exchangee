@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ilhaamms/ybtech/internal/domain"
@@ -98,8 +99,7 @@ func (e *MatchingEngine) ProcessOrder(order *domain.Order) {
 			log.Printf("ERROR: failed to update order status %s: %v", counterOrder.ID, err)
 		}
 
-		e.tradeSeq++
-		tradeID := fmt.Sprintf("T%010d", e.tradeSeq)
+		tradeID := fmt.Sprintf("T%010d", atomic.AddInt64(&e.tradeSeq, 1))
 
 		var buyOrderID, sellOrderID string
 		if order.Side == domain.SideBuy {

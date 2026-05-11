@@ -6,15 +6,15 @@ import (
 )
 
 type Ticker struct {
-	StockCode  string  `json:"stock_code"`
-	LastPrice  float64 `json:"last_price"`
-	PrevPrice  float64 `json:"prev_price"`
-	Change     float64 `json:"change"`
-	ChangePct  float64 `json:"change_pct"`
-	High       float64 `json:"high"`
-	Low        float64 `json:"low"`
-	Volume     int64   `json:"volume"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	StockCode string    `json:"stock_code"`
+	LastPrice float64   `json:"last_price"`
+	PrevPrice float64   `json:"prev_price"`
+	Change    float64   `json:"change"`
+	ChangePct float64   `json:"change_pct"`
+	High      float64   `json:"high"`
+	Low       float64   `json:"low"`
+	Volume    int64     `json:"volume"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type OrderBookEntry struct {
@@ -46,7 +46,7 @@ func NewMarketData(stockCode string, initialPrice float64) *MarketData {
 			Change:    0,
 			ChangePct: 0,
 			High:      initialPrice,
-			Low:       initialPrice,
+			Low:       0, // akan di-set pada UpdatePrice pertama
 			Volume:    0,
 			UpdatedAt: now,
 		},
@@ -58,6 +58,11 @@ func (m *MarketData) UpdatePrice(price float64, volume int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.OpenPrice == 0 {
+		m.OpenPrice = price
+		m.Ticker.PrevPrice = price
+	}
+
 	m.Ticker.PrevPrice = m.Ticker.LastPrice
 	m.Ticker.LastPrice = price
 	m.Ticker.Change = price - m.OpenPrice
@@ -67,7 +72,7 @@ func (m *MarketData) UpdatePrice(price float64, volume int64) {
 	if price > m.Ticker.High {
 		m.Ticker.High = price
 	}
-	if price < m.Ticker.Low {
+	if m.Ticker.Low == 0 || price < m.Ticker.Low {
 		m.Ticker.Low = price
 	}
 	m.Ticker.Volume += volume

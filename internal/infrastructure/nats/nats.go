@@ -5,19 +5,16 @@ import (
 	"log"
 	"sync"
 
-	"github.com/nats-io/nats.go"
 	"github.com/ilhaamms/ybtech/internal/domain"
+	"github.com/nats-io/nats.go"
 )
 
 const (
-	
-	SubjectTradeEvent = "exchange.events.trade"
-	
-	SubjectTickerEvent = "exchange.events.ticker"
-	
-	SubjectOrderEvent = "exchange.events.order"
-	
-	SubjectAllEvents = "exchange.events.*"
+	SubjectTradeEvent     = "exchange.events.trade"
+	SubjectTickerEvent    = "exchange.events.ticker"
+	SubjectOrderEvent     = "exchange.events.order"
+	SubjectOrderBookEvent = "exchange.events.orderbook"
+	SubjectAllEvents      = "exchange.events.*"
 )
 
 type Broker struct {
@@ -30,7 +27,7 @@ func NewBroker(url string) (*Broker, error) {
 	conn, err := nats.Connect(url,
 		nats.Name("mini-exchange"),
 		nats.ReconnectWait(nats.DefaultReconnectWait),
-		nats.MaxReconnects(-1), 
+		nats.MaxReconnects(-1),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			log.Printf("NATS: disconnected: %v", err)
 		}),
@@ -97,6 +94,8 @@ func eventTypeToSubject(t domain.EventType) string {
 		return SubjectTickerEvent
 	case domain.EventOrderUpdate:
 		return SubjectOrderEvent
+	case domain.EventOrderBook:
+		return SubjectOrderBookEvent
 	default:
 		return SubjectAllEvents
 	}

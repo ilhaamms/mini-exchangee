@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/ilhaamms/ybtech/internal/domain"
 	"github.com/ilhaamms/ybtech/internal/repository"
@@ -226,6 +227,7 @@ func (e *MatchingEngine) buildOrderBookLocked(stockCode string) domain.OrderBook
 		StockCode: stockCode,
 		Bids:      bids,
 		Asks:      asks,
+		UpdatedAt: time.Now(),
 	}
 }
 

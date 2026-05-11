@@ -3,6 +3,7 @@ package middleware
 import (
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 type TokenBucket struct {
 	tokens     float64
 	capacity   float64
-	refillRate float64   
+	refillRate float64
 	lastRefill time.Time
 }
 
@@ -20,7 +21,7 @@ type RateLimiter struct {
 	mu       sync.Mutex
 	buckets  map[string]*TokenBucket
 	capacity float64
-	rate     float64 
+	rate     float64
 	done     chan struct{}
 }
 
@@ -28,11 +29,10 @@ func NewRateLimiter(capacity float64, ratePerMinute float64) *RateLimiter {
 	rl := &RateLimiter{
 		buckets:  make(map[string]*TokenBucket),
 		capacity: capacity,
-		rate:     ratePerMinute / 60.0, 
+		rate:     ratePerMinute / 60.0,
 		done:     make(chan struct{}),
 	}
 
-	
 	go rl.cleanup()
 
 	return rl
@@ -53,7 +53,6 @@ func (rl *RateLimiter) Allow(ip string) bool {
 		rl.buckets[ip] = bucket
 	}
 
-	
 	now := time.Now()
 	elapsed := now.Sub(bucket.lastRefill).Seconds()
 	bucket.tokens += elapsed * bucket.refillRate
@@ -62,7 +61,6 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	}
 	bucket.lastRefill = now
 
-	
 	if bucket.tokens >= 1 {
 		bucket.tokens--
 		return true
@@ -87,7 +85,7 @@ func (rl *RateLimiter) cleanup() {
 			rl.mu.Lock()
 			now := time.Now()
 			for ip, bucket := range rl.buckets {
-				
+
 				if now.Sub(bucket.lastRefill) > 10*time.Minute {
 					delete(rl.buckets, ip)
 				}
@@ -118,18 +116,9 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 }
 
 func getClientIP(r *http.Request) string {
-	
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		return forwarded
+	addr := r.RemoteAddr
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		return addr[:idx]
 	}
-
-	
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	
-	return r.RemoteAddr
+	return addr
 }

@@ -105,17 +105,29 @@ func (f *FinnhubFeed) Start() error {
 
 func (f *FinnhubFeed) readLoop() {
 	defer f.wg.Done()
-	defer f.conn.Close()
 
 	for {
 		select {
 		case <-f.done:
 			return
 		default:
-			_, message, err := f.conn.ReadMessage()
+			f.connMu.Lock()
+			conn := f.conn
+			f.connMu.Unlock()
+
+			_, message, err := conn.ReadMessage()
 			if err != nil {
+				select {
+				case <-f.done:
+					return
+				default:
+				}
 				slog.Warn("FINNHUB: read error, attempting reconnect", "error", err)
-				time.Sleep(5 * time.Second)
+				select {
+				case <-f.done:
+					return
+				case <-time.After(5 * time.Second):
+				}
 				if err := f.reconnect(); err != nil {
 					slog.Error("FINNHUB: reconnect failed", "error", err)
 					return

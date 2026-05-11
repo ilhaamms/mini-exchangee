@@ -60,7 +60,7 @@ func (m *MarketData) UpdatePrice(price float64, volume int64) {
 
 	if m.OpenPrice == 0 {
 		m.OpenPrice = price
-		m.Ticker.PrevPrice = price
+		m.Ticker.LastPrice = price
 	}
 
 	m.Ticker.PrevPrice = m.Ticker.LastPrice

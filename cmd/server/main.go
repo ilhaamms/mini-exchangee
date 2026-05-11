@@ -111,8 +111,15 @@ func main() {
 			onEvent = func(event domain.Event) {
 				if err := natsBroker.Publish(event); err != nil {
 					log.Printf("WARNING: NATS publish failed: %v", err)
-
 					hub.BroadcastEvent(event)
+				}
+
+				if redisCache != nil {
+					if event.Type == domain.EventTicker {
+						if ticker, ok := event.Data.(domain.Ticker); ok {
+							redisCache.SetTicker(context.Background(), ticker)
+						}
+					}
 				}
 			}
 
